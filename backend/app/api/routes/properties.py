@@ -1,0 +1,92 @@
+from fastapi import APIRouter, Depends, HTTPException, Query
+from app.core.dependencies import get_current_user
+from app.services.property_service import create_property_service, verify_owner
+from app.schemas.property_schema import PropertyCreate, PropertyResponse, PropertyUpdate
+from typing import List, Optional
+from app.repository.property_repo import (
+    get_all_properties, 
+    get_nearby_properties, 
+    filter_properties,
+    get_property_by_id,
+    update_property,
+    delete_property_repo
+)
+
+router = APIRouter()
+
+@router.post("/", response_model=dict)
+async def create_property(data: PropertyCreate,
+                          current_user = Depends(get_current_user)):
+    return await create_property_service(data, current_user)
+
+@router.get("/", response_model=List[PropertyResponse])
+async def get_properties():
+    return await get_all_properties()
+
+@router.get("/nearby", response_model=List[PropertyResponse])
+async def nearby(
+    longitude: float, 
+    latitude: float, 
+    radius: int = 2000
+):
+    return await get_nearby_properties(longitude, latitude, radius)
+
+@router.get("/filter", response_model=List[PropertyResponse])
+async def filter(
+    min_price: Optional[float] = None, 
+    max_price: Optional[float] = None
+):
+    return await filter_properties(min_price, max_price)
+
+@router.get("/{id}", response_model=PropertyResponse)
+async def get_property(id: str):
+    prop = await get_property_by_id(id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    return prop
+
+@router.put("/{id}", response_model=dict)
+async def update_property_endpoint(
+    id: str, 
+    data: PropertyUpdate,
+    current_user = Depends(get_current_user)
+):
+    # Check existence
+    prop = await get_property_by_id(id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    
+    # Verify Owner
+    verify_owner(prop, current_user)
+    
+    # Clean data
+    update_data = {k: v for k, v in data.dict().items() if v is not None}
+    
+    # Logic to handle lat/long update if present -> convert to location
+    # (Simplified for now: just update other fields or handle loc if implemented in Repo)
+    # The repo update generic dict. We need to handle location transformation here or in service.
+    # User didn't strictly ask for Update logic for Geo, but good to have.
+    # Ignoring Geo update for now to keep it simple as per prompt instructions.
+    
+    success = await update_property(id, update_data)
+    if not success:
+         raise HTTPException(status_code=500, detail="Update failed")
+         
+    return {"message": "Property updated successfully"}
+
+@router.delete("/{id}", response_model=dict)
+async def delete_property_endpoint(
+    id: str,
+    current_user = Depends(get_current_user)
+):
+    prop = await get_property_by_id(id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+        
+    verify_owner(prop, current_user)
+    
+    success = await delete_property_repo(id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Delete failed")
+        
+    return {"message": "Property deleted successfully"}

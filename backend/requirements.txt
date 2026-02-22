@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+pydantic
+pydantic-settings
+python-dotenv
+SQLAlchemy>=2.0.0
+asyncpg
+greenlet
+certifi
+httpx
+web3
+python-jose[cryptography]
+passlib[argon2]
+python-multipart
+email-validator
+fastapi-mail
+google-auth
