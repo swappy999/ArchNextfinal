@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+backend/venv/
+frontend/.next/
+blockchain/artifacts/
+blockchain/cache/
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build outputs
+dist/
+build/
+*.pyc
+__pycache__/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Project specific
+logfile
+pw.txt
+peek_otp.py
+test_supabase.py
