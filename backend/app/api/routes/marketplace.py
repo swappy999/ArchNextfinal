@@ -6,6 +6,8 @@ from app.services.marketplace_service import (
     get_property_listing_service,
     list_property_service
 )
+from app.repository.property_repo import get_property_by_id, update_property
+from fastapi import HTTPException
 
 router = APIRouter(prefix="/marketplace", tags=["Marketplace"])
 
@@ -56,15 +58,53 @@ async def buy_listing(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Records a buy intent — actual transaction must be completed via MetaMask on-chain.
-    Returns the contract call data so the frontend can trigger the wallet transaction.
+    Records a buy intent for On-Chain properties, or processes the purchase directly for Standard properties.
     """
-    return {
-        "listing_id": listing_id,
-        "buyer_wallet": current_user.get("wallet_address"),
-        "price": body.price,
-        "status": "pending_blockchain_confirmation",
-        "message": "Use the marketplace contract `buyProperty(tokenId)` via MetaMask to complete this purchase.",
-        "action_required": "METAMASK_TX"
-    }
+    # 1. Fetch the property
+    prop = await get_property_by_id(listing_id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+        
+    if prop.get("status") != "available":
+        raise HTTPException(status_code=400, detail="Property is no longer available")
+
+    wallet = current_user.get("wallet_address")
+    if not wallet:
+        wallet = current_user.get("email") # Fallback to email if no wallet connected
+        
+    user_id_or_wallet = str(current_user.get("id", current_user.get("_id", wallet)))
+
+    # 2. Determine if it's considered "On-Chain"
+    # To match the frontend simulation, we look for token_id presence
+    has_token = prop.get("nft_token_id") is not None
+    
+    if has_token:
+        # On-chain flow
+        return {
+            "listing_id": listing_id,
+            "buyer_wallet": wallet,
+            "price": body.price,
+            "status": "pending_blockchain_confirmation",
+            "message": "Use the marketplace contract `buyProperty(tokenId)` via MetaMask to complete this purchase.",
+            "action_required": "METAMASK_TX",
+            "is_nft": True
+        }
+    else:
+        # Standard flow - immediately update DB
+        success = await update_property(listing_id, {
+            "owner_id": user_id_or_wallet,
+            "status": "sold"
+        })
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to process transaction")
+            
+        return {
+            "listing_id": listing_id,
+            "buyer": user_id_or_wallet,
+            "price": body.price,
+            "status": "completed",
+            "message": "Asset acquired successfully. View in your portfolio.",
+            "is_nft": False
+        }
 

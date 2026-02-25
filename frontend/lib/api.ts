@@ -7,11 +7,65 @@ async function req(path: string, options: RequestInit = {}, token?: string | nul
     }
     if (token) headers['Authorization'] = `Bearer ${token}`
 
-    const res = await fetch(`${BASE}${path}`, { ...options, headers })
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: res.statusText }))
-        throw new Error(err.detail || 'Request failed')
+    let res = await fetch(`${BASE}${path}`, { ...options, headers })
+
+    // Handle 401 Unauthorized - Attempt Token Refresh
+    if (res.status === 401 && !path.includes('/auth/')) {
+        try {
+            // We use a dynamic import to avoid circular dependency
+            const { useAuthStore } = await import('@/store/authStore')
+            const refreshToken = useAuthStore.getState().refreshToken
+
+            if (refreshToken) {
+                console.log('[API] Access token expired, attempting refresh...')
+                const refreshRes = await fetch(`${BASE}/auth/refresh`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refresh_token: refreshToken })
+                })
+
+                if (refreshRes.ok) {
+                    const data = await refreshRes.json()
+                    if (data.access_token) {
+                        console.log('[API] Refresh successful, retrying request')
+                        // Update the store
+                        useAuthStore.setState({ accessToken: data.access_token })
+                        // Retry the original request with new token
+                        headers['Authorization'] = `Bearer ${data.access_token}`
+                        res = await fetch(`${BASE}${path}`, { ...options, headers })
+                    }
+                } else {
+                    console.warn('[API] Refresh failed, session invalid')
+                }
+            }
+        } catch (err) {
+            console.error('[API] Refresh error:', err)
+        }
     }
+
+    if (!res.ok) {
+        const contentType = res.headers.get('content-type')
+        let detail = ''
+
+        if (contentType && contentType.includes('application/json')) {
+            const err = await res.json().catch(() => ({}))
+            detail = err.detail || err.message || ''
+        }
+
+        const errorMessage = detail || res.statusText || `Request failed with status ${res.status}`
+
+        // If it's a 401 that couldn't be refreshed, auto-logout silently
+        if (res.status === 401) {
+            try {
+                const { useAuthStore } = await import('@/store/authStore')
+                useAuthStore.getState().logout()
+            } catch { }
+            return null as any  // Return null — callers should handle gracefully
+        }
+
+        throw new Error(errorMessage)
+    }
+
     return res.json()
 }
 

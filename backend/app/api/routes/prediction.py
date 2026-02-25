@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from app.services.prediction_service import predict_property_service
 from app.core.dependencies import get_current_user
 from app.schemas.prediction_schema import PredictionResponse
@@ -7,6 +7,7 @@ from app.ai.intelligence.infrastructure_score import calculate_infrastructure_sc
 from app.ai.intelligence.urban_growth import calculate_growth_potential
 from app.ai.intelligence.investment_score import investment_score
 from app.ai.intelligence.heatmap_engine import heatmap_value
+from app.core.rate_limiter import limiter, PREDICT_LIMIT
 import random
 
 router = APIRouter()
@@ -21,16 +22,45 @@ async def predict(property_id: str,
     return result
 
 # ── New: Flexible predict endpoint called by AI Forecast page ─────────────────
+# ── Kolkata area enum for validation ──────────────────────────────────────────
+VALID_AREAS = list({
+    "New Town", "Salt Lake", "Park Street", "Rajarhat", "Dum Dum",
+    "Howrah", "Ballygunge", "Alipore", "Gariahat", "Behala",
+    "Baranagar", "Jadavpur", "Sector V", "Kalyani"
+})
+
+VALID_TYPES = ["Apartment", "Villa", "Commercial", "Plot"]
+
 class FreeformPredictRequest(BaseModel):
-    area: str
-    property_type: str
-    size_sqft: int
-    bedrooms: int
+    """SECURITY: Strict constraints on all prediction inputs."""
+    model_config = ConfigDict(extra="forbid")
+
+    area: str = Field(..., min_length=2, max_length=50)
+    property_type: str = Field(..., min_length=2, max_length=30)
+    size_sqft: int = Field(..., ge=100, le=50_000, description="100–50,000 sqft")
+    bedrooms: int = Field(..., ge=1, le=10, description="1–10 bedrooms")
+
+    @field_validator("area")
+    @classmethod
+    def validate_area(cls, v: str) -> str:
+        # SECURITY: only allow known Kolkata areas
+        if v not in VALID_AREAS:
+            raise ValueError(f"Unknown area. Must be one of: {', '.join(sorted(VALID_AREAS))}")
+        return v
+
+    @field_validator("property_type")
+    @classmethod
+    def validate_type(cls, v: str) -> str:
+        if v not in VALID_TYPES:
+            raise ValueError(f"Unknown property type. Must be one of: {', '.join(VALID_TYPES)}")
+        return v
 
 AREA_MULTIPLIERS = {
-    "Bandra": 1.55, "Worli": 1.6, "Churchgate": 1.7,
-    "Andheri": 1.1, "Powai": 1.15, "Dadar": 1.2,
-    "Malad": 0.95, "Borivali": 0.9
+    "New Town": 1.55, "Salt Lake": 1.5, "Park Street": 1.7,
+    "Rajarhat": 1.15, "Dum Dum": 1.0, "Howrah": 0.95,
+    "Ballygunge": 1.6, "Alipore": 1.65, "Gariahat": 1.2,
+    "Behala": 0.9, "Baranagar": 0.85, "Jadavpur": 1.1,
+    "Sector V": 1.45, "Kalyani": 0.8
 }
 
 TYPE_MULTIPLIERS = {
@@ -39,7 +69,8 @@ TYPE_MULTIPLIERS = {
 }
 
 @router.post("/predict")
-async def freeform_predict(data: FreeformPredictRequest, current_user = Depends(get_current_user)):
+@limiter.limit(PREDICT_LIMIT)  # SECURITY: 10/min per user
+async def freeform_predict(request: Request, data: FreeformPredictRequest, current_user = Depends(get_current_user)):
     """
     Predict property price from user-provided parameters (area, type, sqft, bedrooms).
     Called by the AI Forecast page frontend form.

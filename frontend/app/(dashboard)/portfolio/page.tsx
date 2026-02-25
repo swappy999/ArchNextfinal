@@ -2,9 +2,9 @@
 
 import { useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { 
-    Briefcase, TrendingUp, Building2, 
-    ArrowUpRight, ArrowDownRight, PieChart, 
+import {
+    Briefcase, TrendingUp, Building2,
+    ArrowUpRight, ArrowDownRight, PieChart,
     History, Wallet, Target, Activity, Zap
 } from 'lucide-react'
 import { usePortfolioStore } from '@/store/portfolioStore'
@@ -14,7 +14,7 @@ function AssetCard({ asset, index }: { asset: any, index: number }) {
     const gain = asset.current_value - asset.purchase_price
     const gainPct = ((gain / asset.purchase_price) * 100).toFixed(1)
     const isPositive = gain >= 0
-    
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -23,7 +23,7 @@ function AssetCard({ asset, index }: { asset: any, index: number }) {
             className="group relative p-6 rounded-[2.5rem] glass-card border-white/[0.06] hover:border-cyan-500/30 transition-all duration-500 overflow-hidden"
         >
             <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
-            
+
             <div className="flex items-start justify-between mb-8">
                 <div className="w-14 h-14 rounded-2xl bg-[#0B0F1A] border border-white/[0.05] flex items-center justify-center shadow-xl group-hover:border-cyan-500/20 transition-colors relative overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent" />
@@ -33,15 +33,17 @@ function AssetCard({ asset, index }: { asset: any, index: number }) {
                     <span className="text-[9px] font-black px-2.5 py-1 rounded-lg border border-cyan-500/20 bg-cyan-500/10 text-cyan-400 uppercase tracking-widest shadow-lg">NFT ASSET</span>
                 )}
             </div>
-            
+
             <div className="space-y-1.5 mb-8">
                 <h3 className="text-lg font-black text-white truncate tracking-tight group-hover:text-cyan-50 transition-colors">{asset.title || 'Institutional Node'}</h3>
                 <div className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
-                    <p className="text-xs font-bold text-slate-500 group-hover:text-slate-400 transition-colors uppercase tracking-tight">{asset.area || asset.location || 'GLOBAL NETWORK'}</p>
+                    <p className="text-xs font-bold text-slate-500 group-hover:text-slate-400 transition-colors uppercase tracking-tight">
+                        {asset.area || (typeof asset.location === 'string' ? asset.location : 'KOLKATA NETWORK')}
+                    </p>
                 </div>
             </div>
-            
+
             <div className="flex items-end justify-between pt-6 border-t border-white/[0.04]">
                 <div className="space-y-1">
                     <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.2em]">Live Valuation</p>
@@ -59,7 +61,7 @@ function AssetCard({ asset, index }: { asset: any, index: number }) {
                     </div>
                 </div>
             </div>
-            
+
             {asset.ai_growth_prediction && (
                 <div className="mt-6 p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10 flex items-center justify-between group-hover:bg-blue-500/10 transition-colors">
                     <div className="flex items-center gap-3">
@@ -102,7 +104,7 @@ export default function PortfolioPage() {
                         <p className="text-slate-400 max-w-xl text-lg font-medium">Detailed synthesis of your global on-chain urban asset portfolio and predictive yield analytics.</p>
                     </div>
                 </div>
-                
+
                 <div className="flex items-center gap-3">
                     <div className="glass-panel px-6 py-3.5 rounded-2xl flex items-center gap-4 border-white/[0.04] shadow-2xl">
                         <History size={16} className="text-slate-500" />
@@ -122,11 +124,11 @@ export default function PortfolioPage() {
                         className="group p-8 rounded-[2.5rem] glass-card border-white/[0.06] hover:border-cyan-500/20 transition-all duration-500 overflow-hidden relative"
                     >
                         <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/[0.02] blur-3xl rounded-full" />
-                        
+
                         <div className="w-12 h-12 rounded-2xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-center mb-10 group-hover:scale-110 group-hover:border-cyan-500/30 transition-all duration-500">
                             <stat.icon size={20} className="text-slate-400 group-hover:text-cyan-400 transition-colors" />
                         </div>
-                        
+
                         <div className="space-y-2 relative z-10">
                             <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">{stat.label}</p>
                             {loading ? (
@@ -142,7 +144,7 @@ export default function PortfolioPage() {
                                 </div>
                             )}
                         </div>
-                        
+
                         {/* Interactive Growth Line (Decorative) */}
                         <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent scale-x-0 group-hover:scale-x-100 transition-transform duration-700" />
                     </motion.div>
@@ -161,7 +163,7 @@ export default function PortfolioPage() {
                             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-0.5">{assets.length} NODES IDENTIFIED</p>
                         </div>
                     </div>
-                    
+
                     <div className="flex items-center gap-4">
                         <div className="glass-panel px-4 py-2 rounded-xl flex items-center gap-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">
                             <Activity size={14} className="text-emerald-500" />
@@ -179,7 +181,7 @@ export default function PortfolioPage() {
                         ))}
                     </div>
                 ) : assets.length === 0 ? (
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, scale: 0.98 }}
                         animate={{ opacity: 1, scale: 1 }}
                         className="flex flex-col items-center justify-center py-40 glass-panel rounded-[3rem] border-dashed border-white/[0.06] bg-[#05070A]/50"
@@ -204,7 +206,7 @@ export default function PortfolioPage() {
             {/* Bottom Insight Card */}
             <div className="glass-panel p-10 rounded-[3rem] border-white/[0.06] relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-[40%] h-full bg-cyan-600/5 blur-[120px] rounded-full" />
-                
+
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-12 relative z-10">
                     <div className="space-y-6">
                         <div className="flex items-center gap-3">
@@ -212,7 +214,7 @@ export default function PortfolioPage() {
                             <h2 className="text-2xl font-black text-white tracking-tight">Network Intelligence Insight</h2>
                         </div>
                         <p className="text-slate-400 text-lg font-medium leading-relaxed">
-                            Your portfolio currently exhibits a <span className="text-cyan-400">highly optimized spatial distribution</span> in Mumbai Zone 4. Based on aggregate AI signals, a liquidity rotation towards Zone 7 is projected within the next 14 cycles.
+                            Your portfolio currently exhibits a <span className="text-cyan-400">highly optimized spatial distribution</span> in Kolkata Zone 1. Based on aggregate AI signals, a liquidity rotation towards Zone 2 is projected within the next 14 cycles.
                         </p>
                         <div className="flex items-center gap-6 pt-4">
                             <div className="space-y-1">
@@ -226,7 +228,7 @@ export default function PortfolioPage() {
                             </div>
                         </div>
                     </div>
-                    
+
                     <div className="flex items-center justify-center xl:justify-end">
                         <div className="relative w-full max-w-[300px] aspect-square">
                             <div className="absolute inset-0 bg-cyan-500/10 blur-3xl rounded-full animate-pulse-glow" />

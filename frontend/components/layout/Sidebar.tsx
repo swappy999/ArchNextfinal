@@ -6,9 +6,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useUIStore } from '@/store/uiStore'
 import {
     LayoutDashboard, Map, Building2, ShoppingBag,
-    Briefcase, Brain, ChevronLeft, ChevronRight, Zap, Activity
+    Briefcase, Brain, ChevronLeft, ChevronRight, Activity
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import Image from 'next/image'
 
 const navItems = [
     { href: '/dashboard', label: 'Command Center', icon: LayoutDashboard },
@@ -32,31 +33,48 @@ export default function Sidebar() {
         >
             {/* Glossy Overlay */}
             <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none" />
-            
-            {/* Brand */}
-            <div className="h-24 flex items-center px-7 relative">
-                <div className="relative group/logo cursor-pointer">
-                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(6,182,212,0.4)] group-hover:shadow-[0_0_30px_rgba(6,182,212,0.6)] transition-all duration-500">
-                        <Zap size={20} className="text-white fill-white transition-transform group-hover:scale-110" />
-                    </div>
-                    {/* Pulsing Aura */}
-                    <div className="absolute inset-[-4px] rounded-[20px] border border-cyan-500/20 animate-pulse-glow opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
 
-                <AnimatePresence>
-                    {sidebarOpen && (
-                        <motion.div
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: -10 }}
-                            transition={{ duration: 0.3, ease: "easeOut" }}
-                            className="ml-4"
-                        >
-                            <div className="font-bold text-white text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">ArchNext</div>
-                            <div className="text-[10px] text-cyan-500 font-bold tracking-[0.2em] uppercase opacity-80">Smart City OS</div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+            {/* Brand */}
+            <div className="h-24 flex items-center px-[22px] relative mt-2">
+                <Link href="/" className="relative flex items-center w-full group/logo transition-all duration-300">
+                    <AnimatePresence mode="wait">
+                        {sidebarOpen ? (
+                            <motion.div
+                                key="full-logo"
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                transition={{ duration: 0.3 }}
+                                className="relative w-40 h-10 flex items-center"
+                            >
+                                <Image
+                                    src="/branding/logo-full.png"
+                                    alt="ArchNext Full Branding"
+                                    fill
+                                    className="object-contain object-left drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] group-hover/logo:drop-shadow-[0_0_20px_rgba(255,255,255,0.2)] transition-all duration-300 mix-blend-lighten brightness-[1.2]"
+                                    priority
+                                />
+                            </motion.div>
+                        ) : (
+                            <motion.div
+                                key="icon-logo"
+                                initial={{ opacity: 0, scale: 0.8 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.8 }}
+                                transition={{ duration: 0.3 }}
+                                className="relative w-11 h-11 ml-1"
+                            >
+                                <Image
+                                    src="/branding/logo-icon.png"
+                                    alt="ArchNext Icon"
+                                    fill
+                                    className="object-contain drop-shadow-[0_0_15px_rgba(14,165,233,0.3)] group-hover/logo:drop-shadow-[0_0_25px_rgba(14,165,233,0.5)] transition-all duration-300 mix-blend-lighten brightness-[1.2]"
+                                    priority
+                                />
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </Link>
             </div>
 
             {/* Navigation */}
@@ -77,7 +95,7 @@ export default function Sidebar() {
                             >
                                 {/* Active Background Glow */}
                                 {active && (
-                                    <motion.div 
+                                    <motion.div
                                         layoutId="sidebar-active-bg"
                                         className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-transparent"
                                         initial={{ opacity: 0 }}
@@ -86,13 +104,13 @@ export default function Sidebar() {
                                     />
                                 )}
 
-                                <Icon 
-                                    size={20} 
+                                <Icon
+                                    size={20}
                                     strokeWidth={active ? 2.5 : 2}
                                     className={cn(
-                                        "shrink-0 transition-all duration-300 relative z-10", 
+                                        "shrink-0 transition-all duration-300 relative z-10",
                                         active ? "text-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]" : "group-hover/item:text-slate-200"
-                                    )} 
+                                    )}
                                 />
 
                                 <AnimatePresence>
@@ -108,9 +126,9 @@ export default function Sidebar() {
                                         </motion.span>
                                     )}
                                 </AnimatePresence>
-                                
+
                                 {active && (
-                                    <motion.div 
+                                    <motion.div
                                         layoutId="sidebar-active-indicator"
                                         className="absolute left-0 w-1 h-6 bg-cyan-400 rounded-r-full shadow-[0_0_15px_#22d3ee]"
                                         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
@@ -133,7 +151,7 @@ export default function Sidebar() {
                             className="p-4 rounded-2xl glass-card relative overflow-hidden group/status cursor-pointer"
                         >
                             <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent group-hover:from-cyan-500/10 transition-colors" />
-                            
+
                             <div className="flex items-center justify-between mb-2 relative z-10">
                                 <span className="text-[10px] uppercase font-bold text-cyan-500 tracking-wider">Neural Link</span>
                                 <div className="flex items-center gap-1.5">
@@ -155,7 +173,7 @@ export default function Sidebar() {
                             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
                         </div>
                     )}
-                    
+
                     <button
                         onClick={toggleSidebar}
                         className="flex-1 flex items-center justify-center h-10 rounded-xl hover:bg-white/[0.04] text-slate-500 hover:text-white transition-all duration-300 border border-transparent hover:border-white/[0.08]"

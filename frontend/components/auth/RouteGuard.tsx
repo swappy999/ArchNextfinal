@@ -9,7 +9,7 @@ import { Loader2 } from 'lucide-react'
 const PUBLIC_ROUTES = ['/', '/docs']
 
 // Routes specifically for the onboarding flow
-const AUTH_FLOW_ROUTES = ['/auth/signin', '/auth/signup', '/auth/forgot-password', '/auth/verify', '/auth/wallet']
+const AUTH_FLOW_ROUTES = ['/auth/signin', '/auth/signup', '/auth/forgot-password', '/auth/verify', '/auth/verify-google', '/auth/wallet', '/auth/success', '/auth/reset-password']
 
 export default function RouteGuard({ children }: { children: React.ReactNode }) {
     const router = useRouter()

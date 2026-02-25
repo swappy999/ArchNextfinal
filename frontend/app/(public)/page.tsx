@@ -1,11 +1,22 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { motion, useScroll, useTransform, useSpring } from 'framer-motion'
 import { Building2, Brain, Shield, Zap, ChevronRight, ArrowUpRight, Globe, Layers, Activity, Lock, Cpu, Database, Network } from 'lucide-react'
 import { useRef, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/store/authStore'
+import dynamic from 'next/dynamic'
+
+const LandingMap = dynamic(() => import('@/components/map/LandingMap'), {
+    ssr: false,
+    loading: () => (
+        <div className="w-full h-full bg-[#0A0E17] flex items-center justify-center rounded-[3rem]">
+            <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+    ),
+})
 
 const features = [
     { icon: Building2, title: 'Asset Tokenization', desc: 'Convert physical real estate into institutional-grade ERC-721 digital assets.' },
@@ -121,17 +132,14 @@ export default function LandingPage() {
                     animate={{ opacity: 1, x: 0 }}
                     className="flex items-center gap-4 cursor-pointer group relative z-10"
                 >
-                    <div className="relative w-10 h-10 rounded-xl bg-white/[0.03] border border-white/10 p-[1px] overflow-hidden group-hover:border-cyan-500/50 transition-colors duration-500">
-                        <div className="w-full h-full bg-[#07090F] rounded-[9px] flex items-center justify-center relative z-10">
-                            <div className="w-3.5 h-3.5 bg-white rounded-sm rotate-45 shadow-[0_0_15px_rgba(255,255,255,0.8)] group-hover:scale-110 transition-transform duration-500" />
-                        </div>
-                        <motion.div
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-                            className="absolute inset-0 bg-gradient-to-tr from-cyan-500/20 via-transparent to-purple-500/20 opacity-0 group-hover:opacity-100 transition-opacity"
-                        />
-                    </div>
-                    <span className="text-xl font-black tracking-tighter text-white">ArchNext</span>
+                    <Image
+                        src="/branding/logo-full.png"
+                        alt="ArchNext"
+                        width={140}
+                        height={32}
+                        className="object-contain hover:opacity-80 transition-opacity drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] mix-blend-lighten brightness-[1.2] contrast-[1.1]"
+                        priority
+                    />
                 </motion.div>
 
                 <motion.div
@@ -186,7 +194,7 @@ export default function LandingPage() {
                         <div className="relative mb-12">
                             <SectionLabel text="Spatial Protocol v1.0.2" />
 
-                            <h1 className="text-[10vw] md:text-[9vw] lg:text-[8.5rem] font-black leading-[0.8] text-white flex flex-col items-center">
+                            <h1 className="text-[10vw] md:text-[9vw] lg:text-[8.5rem] font-black leading-[0.8] text-white flex flex-col items-center mt-6">
                                 <motion.span
                                     initial={{ opacity: 0, y: 30, filter: 'blur(10px)' }}
                                     animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
@@ -412,33 +420,8 @@ export default function LandingPage() {
                             >
                                 <div className="absolute -inset-4 bg-cyan-500/10 blur-3xl opacity-0 group-hover:opacity-100 transition duration-1000" />
                                 <div className="glass-panel p-2 rounded-[3.5rem] border-white/10 relative overflow-hidden">
-                                    <div className="aspect-[4/3] rounded-[3rem] bg-[#0A0E17] border border-white/5 relative overflow-hidden">
-                                        {/* Mock Map Texture */}
-                                        <div className="absolute inset-0 bg-dot-grid-animated opacity-20 scale-150" />
-                                        <div className="absolute inset-0 bg-gradient-to-tr from-cyan-900/10 via-transparent to-transparent" />
-
-                                        {/* Animated Map Points */}
-                                        {[
-                                            { t: '20%', l: '30%' }, { t: '45%', l: '60%' }, { t: '70%', l: '25%' }, { t: '35%', l: '80%' }
-                                        ].map((p, i) => (
-                                            <motion.div
-                                                key={i}
-                                                initial={{ scale: 0, opacity: 0 }}
-                                                whileInView={{ scale: 1, opacity: 1 }}
-                                                transition={{ delay: 0.5 + i * 0.2, duration: 0.8 }}
-                                                className="absolute w-6 h-6 -translate-x-1/2 -translate-y-1/2"
-                                                style={{ top: p.t, left: p.l }}
-                                            >
-                                                <div className="absolute inset-0 bg-cyan-400/20 rounded-full animate-ping" />
-                                                <div className="absolute inset-1 bg-cyan-400 rounded-full shadow-[0_0_15px_#22d3ee] border-2 border-white/20" />
-                                            </motion.div>
-                                        ))}
-
-                                        {/* Map Overlay UI */}
-                                        <div className="absolute top-8 left-8 p-4 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10">
-                                            <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Active Nodes</div>
-                                            <div className="text-lg font-bold text-white tracking-tighter">New York / Sector 4</div>
-                                        </div>
+                                    <div className="aspect-[4/3] rounded-[3rem] border border-white/5 relative overflow-hidden">
+                                        <LandingMap />
                                     </div>
                                 </div>
                             </motion.div>
@@ -508,11 +491,14 @@ export default function LandingPage() {
             <footer className="relative py-24 px-16 border-t border-white/5 bg-[#05070A]">
                 <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start gap-16">
                     <div className="flex flex-col gap-8">
-                        <div className="flex items-center gap-3 group cursor-pointer">
-                            <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center group-hover:bg-cyan-500/20 transition-colors">
-                                <div className="w-2.5 h-2.5 bg-white rounded-sm rotate-45" />
-                            </div>
-                            <span className="text-xl font-black tracking-tighter">ArchNext</span>
+                        <div className="flex items-center gap-3 group cursor-pointer mb-2">
+                            <Image
+                                src="/branding/logo-full.png"
+                                alt="ArchNext"
+                                width={180}
+                                height={40}
+                                className="object-contain opacity-80 group-hover:opacity-100 transition-opacity mix-blend-lighten brightness-[1.2]"
+                            />
                         </div>
                         <p className="text-sm text-slate-600 max-w-xs font-medium leading-relaxed">
                             Architecting the next generation of institutional urban intelligence and asset ownership.

@@ -9,30 +9,38 @@ async def get_all_listings_service() -> list:
     Combines MongoDB metadata with on-chain listing status.
     """
     all_props = await get_all_properties()
-    nft_address = getattr(settings, "NFT_CONTRACT_ADDRESS", None)
+
+    # Filter to only 'available' properties, take the first 40 to ensure UI performance
+    available_props = [p for p in all_props if p.get("status", "available") == "available"][:40]
 
     listings = []
-    for prop in all_props:
+    
+    # We want to simulate a live market. 
+    # We will make roughly 30% "On-Chain" (NFT) and 70% "Standard"
+    for idx, prop in enumerate(available_props):
+        is_nft = (idx % 3 == 0) # Every 3rd property is "On-Chain"
+        
+        # Real INR price from DB
+        real_price = prop.get("price", 0)
+        
+        # Determine token ID for the UI
         token_id = prop.get("nft_token_id")
-        if token_id is None:
-            continue  # Skip non-minted properties
-
-        # Check on-chain listing status
-        on_chain = get_listing(nft_address, token_id) if nft_address else {"active": False, "mode": "offline"}
-
-        if on_chain.get("active"):
-            listings.append({
-                "property_id": prop.get("id"),
-                "title": prop.get("title"),
-                "address": prop.get("address"),
-                "price_listed_matic": on_chain.get("price_matic"),
-                "price_listed_wei": on_chain.get("price_wei"),
-                "seller_wallet": on_chain.get("seller"),
-                "nft_token_id": token_id,
-                "location": prop.get("location"),
-                "image_url": prop.get("image_url"),
-                "on_chain": on_chain
-            })
+        if is_nft and token_id is None:
+            token_id = 1000 + idx # Mock token ID for display purposes if not minted
+            
+        listings.append({
+            "id": prop.get("id"),
+            "property_id": prop.get("id"),
+            "title": prop.get("title", "Premium Kolkata Asset"),
+            "address": prop.get("description", "Kolkata, WB")[:50], # Abbreviate desc as address
+            "price": real_price,
+            "seller": prop.get("owner_id"),
+            "is_nft": is_nft,
+            "token_id": token_id if is_nft else None,
+            "nft_token_id": token_id if is_nft else None,
+            "location": {"lat": prop.get("latitude"), "lng": prop.get("longitude")},
+            "image_url": prop.get("image_url") or (prop.get("images") and prop.get("images")[0]) or f"https://picsum.photos/seed/{1000 + idx}/800/600",
+        })
 
     return listings
 

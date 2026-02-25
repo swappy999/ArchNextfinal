@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion'
 import ParticleBackground from './ParticleBackground'
+import Image from 'next/image'
 
 interface AuthLayoutProps {
     children: React.ReactNode
@@ -46,16 +47,18 @@ export default function AuthLayout({ children, title, subtitle }: AuthLayoutProp
                     className="flex flex-col items-center mb-8"
                 >
                     {/* Logo */}
-                    <div className="relative mb-5">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                <path d="M2 17l10 5 10-5" />
-                                <path d="M2 12l10 5 10-5" />
-                            </svg>
+                    <div className="relative mb-5 flex justify-center">
+                        <div className="relative w-16 h-16 rounded-2xl flex items-center justify-center">
+                            <Image
+                                src="/branding/logo-icon.png"
+                                alt="ArchNext Icon"
+                                fill
+                                className="object-contain drop-shadow-[0_0_20px_rgba(14,165,233,0.4)] mix-blend-lighten brightness-[1.2]"
+                                priority
+                            />
                         </div>
                         {/* Logo glow */}
-                        <div className="absolute inset-0 w-10 h-10 rounded-xl bg-cyan-400/20 blur-xl" />
+                        <div className="absolute inset-0 w-16 h-16 rounded-2xl bg-cyan-400/10 blur-xl pointer-events-none" />
                     </div>
 
                     <h1 className="text-[22px] font-semibold text-white tracking-tight">

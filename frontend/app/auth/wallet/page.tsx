@@ -40,7 +40,7 @@ export default function WalletConnectPage() {
 
             // Redirect to dashboard after a brief success delay
             setTimeout(() => {
-                router.push('/dashboard')
+                router.push('/auth/success')
             }, 1500)
 
         } catch (err) {

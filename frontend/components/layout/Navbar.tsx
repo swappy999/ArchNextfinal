@@ -75,7 +75,7 @@ export default function Navbar() {
                     <div className="w-px h-6 bg-white/10" />
                     <div className="flex flex-col items-end">
                         <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">Network</span>
-                        <span className="text-[10px] font-bold text-white tracking-tight">Mumbai-4</span>
+                        <span className="text-[10px] font-bold text-white tracking-tight">Kolkata-1</span>
                     </div>
                 </div>
 

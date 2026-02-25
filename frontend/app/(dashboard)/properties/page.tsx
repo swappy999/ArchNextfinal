@@ -30,7 +30,9 @@ function PropertyCard({ property, view, index }: { property: any; view: 'grid' |
                         )}
                     </div>
                     <div className="flex items-center gap-3 text-xs font-medium text-slate-500">
-                        <span className="flex items-center gap-1"><MapPin size={12} /> {property.area || property.location || 'Mumbai, IN'}</span>
+                        <span className="flex items-center gap-1">
+                            <MapPin size={12} /> {property.area || (typeof property.location === 'string' ? property.location : 'Kolkata, IN')}
+                        </span>
                     </div>
                 </div>
                 <div className="flex items-center gap-8 shrink-0">
@@ -62,7 +64,7 @@ function PropertyCard({ property, view, index }: { property: any; view: 'grid' |
                 <div className="relative h-48 bg-[#05070A] overflow-hidden flex items-center justify-center group-hover:scale-105 transition-transform duration-700">
                     <div className="absolute inset-0 grid-bg opacity-10" />
                     <Building2 size={48} className="text-slate-800 group-hover:text-cyan-400/50 transition-colors duration-700" />
-                    
+
                     {/* Floating Badges */}
                     <div className="absolute top-5 left-5">
                         {property.is_nft && (
@@ -71,7 +73,7 @@ function PropertyCard({ property, view, index }: { property: any; view: 'grid' |
                             </span>
                         )}
                     </div>
-                    
+
                     <div className="absolute bottom-5 right-5">
                         <div className="px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-black text-cyan-400 tracking-widest flex items-center gap-1.5">
                             <Activity size={12} /> 8.4
@@ -86,7 +88,7 @@ function PropertyCard({ property, view, index }: { property: any; view: 'grid' |
                         </h3>
                         <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-tight">
                             <MapPin size={12} className="text-slate-700" />
-                            {property.area || property.location || 'Mumbai Network'}
+                            {property.area || (typeof property.location === 'string' ? property.location : 'Kolkata Network')}
                         </div>
                     </div>
 
@@ -128,7 +130,7 @@ export default function PropertiesPage() {
                         <p className="text-slate-400 max-w-xl text-lg font-medium">Monitoring {properties.length} active urban nodes across the global spatial network.</p>
                     </div>
                 </div>
-                
+
                 <div className="flex flex-col md:flex-row items-center gap-4">
                     <div className="relative group/search w-full md:w-64">
                         <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within/search:text-cyan-400 transition-colors" />
@@ -181,7 +183,7 @@ export default function PropertiesPage() {
                     </div>
                     <h2 className="text-2xl font-black text-slate-300 tracking-tight uppercase tracking-widest">Registry Sync Failed</h2>
                     <p className="text-slate-500 mt-2 max-w-xs text-center font-medium">No active urban nodes match your current search parameters.</p>
-                    <button 
+                    <button
                         onClick={() => setSearch('')}
                         className="mt-10 px-8 py-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em] hover:bg-cyan-500/10 hover:border-cyan-500/20 transition-all"
                     >

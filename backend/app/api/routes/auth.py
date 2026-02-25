@@ -1,9 +1,21 @@
-from fastapi import APIRouter, Depends
+"""
+Auth Routes — ArchNext Security Layer
+========================================
+All public auth endpoints are rate-limited to prevent brute-force
+and credential stuffing attacks (OWASP A07:2021).
+"""
+
+from fastapi import APIRouter, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from app.schemas.auth_schema import EmailSignup, EmailLogin, VerifyEmailCode, ForgotPassword
+from app.schemas.auth_schema import (
+    EmailSignup, EmailLogin, VerifyEmailCode, ForgotPassword,
+    ResendVerification, ResetPassword, GoogleLoginRequest,
+    RefreshTokenRequest, WalletNonceRequest, WalletVerifyRequest,
+)
 from app.services.auth_service import (
-    email_signup, email_login, verify_email_code_service,
-    google_login_service, generate_nonce, forgot_password_service
+    generate_nonce, forgot_password_service,
+    resend_verification_service, email_signup, email_login,
+    verify_email_code_service, reset_password_service, google_login_service
 )
 from app.services.token_service import blacklist_token
 from app.repository.user_repo import get_user_by_email, update_user, get_user_by_wallet, create_user
@@ -11,17 +23,17 @@ from app.integrations.metamask import verify_wallet_signature
 from app.core.security import create_access_token, create_refresh_token
 from app.core.config import settings
 from app.core.dependencies import get_current_user
-from pydantic import BaseModel
+from app.core.rate_limiter import limiter, AUTH_LIMIT, VERIFY_LIMIT
 from jose import jwt
 
 security = HTTPBearer()
 router = APIRouter()
 
-class RefreshRequest(BaseModel):
-    refresh_token: str
 
+# ─── Token Refresh ───────────────────────────────────────────────────────────
 @router.post("/refresh")
-async def refresh_token(data: RefreshRequest):
+@limiter.limit(AUTH_LIMIT)  # SECURITY: rate-limited
+async def refresh_token(request: Request, data: RefreshTokenRequest):
     try:
         payload = jwt.decode(
             data.refresh_token,
@@ -46,6 +58,8 @@ async def refresh_token(data: RefreshRequest):
     except Exception as e:
         return {"error": "Invalid refresh token"}
 
+
+# ─── Logout ──────────────────────────────────────────────────────────────────
 @router.post("/logout")
 async def logout(
     credentials: HTTPAuthorizationCredentials = Depends(security)
@@ -54,34 +68,60 @@ async def logout(
     await blacklist_token(token)
     return {"message": "Logged out successfully"}
 
+
+# ─── Signup ──────────────────────────────────────────────────────────────────
 @router.post("/signup")
-async def signup(data: EmailSignup):
+@limiter.limit(AUTH_LIMIT)  # SECURITY: 5/min per IP
+async def signup(request: Request, data: EmailSignup):
     return await email_signup(data)
 
+
+# ─── Login ───────────────────────────────────────────────────────────────────
 @router.post("/login")
-async def login(data: EmailLogin):
+@limiter.limit(AUTH_LIMIT)  # SECURITY: 5/min per IP
+async def login(request: Request, data: EmailLogin):
     return await email_login(data)
 
+
+# ─── Email Verification ─────────────────────────────────────────────────────
 @router.post("/verify-email")
-async def verify_email(data: VerifyEmailCode):
+@limiter.limit(VERIFY_LIMIT)  # SECURITY: 3/min per IP
+async def verify_email(request: Request, data: VerifyEmailCode):
     return await verify_email_code_service(data)
 
+
+# ─── Forgot Password ────────────────────────────────────────────────────────
 @router.post("/forgot-password")
-async def forgot_password(data: ForgotPassword):
+@limiter.limit(VERIFY_LIMIT)  # SECURITY: 3/min per IP (prevents email enumeration spam)
+async def forgot_password(request: Request, data: ForgotPassword):
     return await forgot_password_service(data.email)
 
-class GoogleLogin(BaseModel):
-    token: str
 
+# ─── Resend Verification ────────────────────────────────────────────────────
+@router.post("/resend-verification")
+@limiter.limit(VERIFY_LIMIT)  # SECURITY: 3/min per IP
+async def resend_verification(request: Request, data: ResendVerification):
+    return await resend_verification_service(data.email)
+
+
+# ─── Reset Password ─────────────────────────────────────────────────────────
+@router.post("/reset-password")
+@limiter.limit(AUTH_LIMIT)  # SECURITY: 5/min per IP
+async def reset_password(request: Request, data: ResetPassword):
+    return await reset_password_service(data.token, data.password, data.confirm_password)
+
+
+# ─── Google Login ────────────────────────────────────────────────────────────
 @router.post("/google-login")
-async def google_login(data: GoogleLogin):
+@limiter.limit(AUTH_LIMIT)  # SECURITY: 5/min per IP
+async def google_login(request: Request, data: GoogleLoginRequest):
     return await google_login_service(data.token)
 
-class WalletRequest(BaseModel):
-    wallet_address: str
 
+# ─── Wallet Nonce ────────────────────────────────────────────────────────────
 @router.post("/wallet-nonce")
-async def wallet_nonce(data: WalletRequest):
+@limiter.limit(AUTH_LIMIT)  # SECURITY: 5/min per IP
+async def wallet_nonce(request: Request, data: WalletNonceRequest):
 
     nonce = generate_nonce()
 
@@ -102,13 +142,11 @@ async def wallet_nonce(data: WalletRequest):
 
     return {"nonce": nonce}
 
-class WalletVerify(BaseModel):
-    wallet_address: str
-    signature: str
-    message: str
 
+# ─── Wallet Verify ───────────────────────────────────────────────────────────
 @router.post("/wallet-verify")
-async def wallet_verify(data: WalletVerify):
+@limiter.limit(AUTH_LIMIT)  # SECURITY: 5/min per IP
+async def wallet_verify(request: Request, data: WalletVerifyRequest):
 
     # Verify signature
     recovered = verify_wallet_signature(
@@ -148,6 +186,7 @@ async def wallet_verify(data: WalletVerify):
         "refresh_token": refresh_token
     }
 
+# ─── Protected Test ──────────────────────────────────────────────────────────
 @router.get("/protected-test")
 async def protected_test(current_user=Depends(get_current_user)):
     return {

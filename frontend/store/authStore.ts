@@ -19,6 +19,9 @@ interface AuthState {
     walletConnected: boolean
     login: (email: string, password: string) => Promise<void>
     signup: (name: string, email: string, password: string) => Promise<void>
+    verifyOTP: (email: string, code: string) => Promise<void>
+    googleLogin: (token: string) => Promise<void>
+    resetPassword: (token: string, password: string, confirmPassword: string) => Promise<void>
     logout: () => void
     setUser: (user: User) => void
     verifyEmail: () => void
@@ -39,15 +42,17 @@ export const useAuthStore = create<AuthState>()(
                 set({ isLoading: true })
                 try {
                     const result = await api.post('/auth/login', { email, password })
+
+                    if (result.error) {
+                        throw new Error(result.error)
+                    }
+
+                    // Login always requires OTP verification
                     set({
-                        accessToken: result.access_token,
-                        refreshToken: result.refresh_token,
+                        user: { email } as User,
                         isLoading: false,
-                        emailVerified: result.email_verified || false,
+                        emailVerified: false
                     })
-                    // Fetch user profile — backend returns { user: {...} }, unwrap it
-                    const response = await api.get('/users/me', result.access_token)
-                    set({ user: response.user ?? response })
                 } catch (e) {
                     set({ isLoading: false })
                     throw e
@@ -58,11 +63,68 @@ export const useAuthStore = create<AuthState>()(
                 set({ isLoading: true })
                 try {
                     const result = await api.post('/auth/signup', { username: name, email, password })
+                    // Signup always requires verification now
                     set({
+                        user: { email, username: name } as User,
                         accessToken: result.access_token,
                         refreshToken: result.refresh_token,
                         isLoading: false,
-                        emailVerified: result.email_verified || false,
+                        emailVerified: false,
+                    })
+                } catch (e) {
+                    set({ isLoading: false })
+                    throw e
+                }
+            },
+
+            verifyOTP: async (email: string, code: string) => {
+                set({ isLoading: true })
+                try {
+                    const result = await api.post('/auth/verify-email', { email, code })
+                    set({
+                        accessToken: result.access_token,
+                        refreshToken: result.refresh_token,
+                        emailVerified: true,
+                        isLoading: false
+                    })
+                    const response = await api.get('/users/me', result.access_token)
+                    set({ user: response.user ?? response })
+                } catch (e) {
+                    set({ isLoading: false })
+                    throw e
+                }
+            },
+
+            resetPassword: async (token: string, password: string, confirmPassword: string) => {
+                set({ isLoading: true })
+                try {
+                    const result = await api.post('/auth/reset-password', {
+                        token,
+                        password,
+                        confirm_password: confirmPassword
+                    })
+                    if (result.error) {
+                        throw new Error(result.error)
+                    }
+                    set({ isLoading: false })
+                } catch (e) {
+                    set({ isLoading: false })
+                    throw e
+                }
+            },
+
+            googleLogin: async (token: string) => {
+                set({ isLoading: true })
+                try {
+                    const result = await api.post('/auth/google-login', { token })
+                    if (result.error) {
+                        throw new Error(result.error)
+                    }
+                    set({
+                        accessToken: result.access_token,
+                        refreshToken: result.refresh_token,
+                        emailVerified: true,
+                        isLoading: false
                     })
                     const response = await api.get('/users/me', result.access_token)
                     set({ user: response.user ?? response })
@@ -73,7 +135,6 @@ export const useAuthStore = create<AuthState>()(
             },
 
             logout: () => {
-                // Fire-and-forget backend logout to blacklist token
                 const token = (get() as any).accessToken
                 if (token) {
                     api.post('/auth/logout', {}, token).catch(() => { })

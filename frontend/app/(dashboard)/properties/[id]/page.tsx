@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { 
-    Building2, Globe, ShieldCheck, Activity, 
-    Zap, TrendingUp, ArrowLeft, Fingerprint, 
+import {
+    Building2, Globe, ShieldCheck, Activity,
+    Zap, TrendingUp, ArrowLeft, Fingerprint,
     Radar, MapPin, Share2, Heart, Cpu, Network
 } from 'lucide-react'
 import { usePropertyStore } from '@/store/propertyStore'
@@ -18,7 +18,7 @@ function AIRadarChart() {
             <div className="absolute inset-[20%] border border-white/[0.05] rounded-full" />
             <div className="absolute inset-[40%] border border-white/[0.05] rounded-full" />
             <div className="absolute inset-[60%] border border-white/[0.05] rounded-full" />
-            
+
             {/* Axis */}
             {[0, 60, 120, 180, 240, 300].map(deg => (
                 <div key={deg} className="absolute h-full w-[1px] bg-white/[0.05]" style={{ transform: `rotate(${deg}deg)` }} />
@@ -35,7 +35,7 @@ function AIRadarChart() {
                     viewBox="0 0 200 200"
                 />
             </svg>
-            
+
             {/* Pulsing Center */}
             <div className="w-2 h-2 rounded-full bg-cyan-500 shadow-[0_0_15px_#22d3ee] z-10" />
         </div>
@@ -49,10 +49,10 @@ function StatsRing({ value, label }: { value: number, label: string }) {
             <div className="relative w-32 h-32 flex items-center justify-center">
                 <svg className="w-full h-full -rotate-90">
                     <circle cx="64" cy="64" r="58" fill="none" className="stroke-white/[0.03]" strokeWidth="8" />
-                    <motion.circle 
-                        cx="64" cy="64" r="58" fill="none" 
-                        className="stroke-cyan-500" 
-                        strokeWidth="8" 
+                    <motion.circle
+                        cx="64" cy="64" r="58" fill="none"
+                        className="stroke-cyan-500"
+                        strokeWidth="8"
                         strokeDasharray="364.4"
                         initial={{ strokeDashoffset: 364.4 }}
                         animate={{ strokeDashoffset: 364.4 - (364.4 * percentage) / 100 }}
@@ -95,7 +95,7 @@ export default function PropertyDetailPage() {
         <div className="space-y-12">
             {/* Breadcrumb & Actions */}
             <div className="flex items-center justify-between px-2">
-                <button 
+                <button
                     onClick={() => router.back()}
                     className="flex items-center gap-3 text-[10px] font-black text-slate-500 hover:text-white transition-colors uppercase tracking-[0.2em] group"
                 >
@@ -115,7 +115,7 @@ export default function PropertyDetailPage() {
                         {/* Shimmer Effect */}
                         <div className="absolute inset-0 grid-bg opacity-20" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
-                        
+
                         {/* Placeholder Content */}
                         <div className="absolute inset-0 flex items-center justify-center">
                             <Building2 size={120} className="text-slate-900 group-hover:scale-110 group-hover:text-slate-800 transition-all duration-1000" />
@@ -141,7 +141,9 @@ export default function PropertyDetailPage() {
                                 <div className="space-y-3">
                                     <div className="flex items-center gap-2 text-cyan-400">
                                         <MapPin size={16} />
-                                        <span className="text-[10px] font-black uppercase tracking-[0.2em]">{property.location || 'MUMBAI CENTRAL, IN'}</span>
+                                        <span className="text-[10px] font-black uppercase tracking-[0.2em]">
+                                            {typeof property.location === 'string' ? property.location : (property.area || 'KOLKATA CENTRAL, IN')}
+                                        </span>
                                     </div>
                                     <h1 className="text-5xl font-black text-white tracking-tighter text-gradient leading-none">
                                         {property.title}
@@ -195,7 +197,7 @@ export default function PropertyDetailPage() {
                                             <p className="text-xs font-bold text-white">{item.score}%</p>
                                         </div>
                                         <div className="h-1.5 w-full bg-white/[0.03] rounded-full overflow-hidden">
-                                            <motion.div 
+                                            <motion.div
                                                 initial={{ width: 0 }}
                                                 animate={{ width: `${item.score}%` }}
                                                 transition={{ delay: i * 0.1 + 0.5, duration: 1 }}
@@ -214,7 +216,7 @@ export default function PropertyDetailPage() {
                 <div className="xl:col-span-4 space-y-10">
                     <div className="glass-panel p-10 rounded-[3rem] border-white/[0.08] relative overflow-hidden flex flex-col items-center text-center">
                         <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 blur-3xl -translate-y-1/2 translate-x-1/2" />
-                        
+
                         <div className="flex flex-col items-center gap-4 mb-10">
                             <div className="w-16 h-16 rounded-[1.5rem] bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center shadow-2xl mb-2">
                                 <Zap size={28} className="text-cyan-400" />

@@ -10,6 +10,7 @@ pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
+RESET_TOKEN_EXPIRE_MINUTES = 15
 
 
 # -------------------------
@@ -53,3 +54,18 @@ def create_refresh_token(data: dict):
         settings.SECRET_KEY,
         algorithm=ALGORITHM
     )
+
+def create_reset_token(email: str):
+    to_encode = {"email": email}
+    expire = datetime.utcnow() + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire, "type": "reset"})
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
+
+def verify_reset_token(token: str):
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") != "reset":
+            return None
+        return payload.get("email")
+    except Exception:
+        return None

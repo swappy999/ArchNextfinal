@@ -18,7 +18,7 @@ interface PredictionResult {
     }
 }
 
-const AREAS = ['Bandra', 'Andheri', 'Powai', 'Churchgate', 'Worli', 'Dadar', 'Malad', 'Borivali']
+const AREAS = ['New Town', 'Salt Lake', 'Park Street', 'Ballygunge', 'Alipore', 'Rajarhat', 'Gariahat', 'Howrah', 'Dum Dum', 'Sector V', 'Jadavpur', 'Behala', 'Baranagar', 'Kalyani']
 const TYPES = ['Apartment', 'Villa', 'Commercial', 'Plot']
 
 export default function PredictionPage() {
@@ -154,7 +154,7 @@ export default function PredictionPage() {
                         </div>
                         <div>
                             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Compute Status</p>
-                            <p className="text-sm font-bold text-white tracking-tight">Neural Engine Optimized for Mumbai Network</p>
+                            <p className="text-sm font-bold text-white tracking-tight">Neural Engine Optimized for Kolkata Network</p>
                         </div>
                     </div>
                 </div>

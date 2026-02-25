@@ -43,6 +43,7 @@ export const usePortfolioStore = create<PortfolioState>((set) => ({
         set({ loading: true })
         try {
             const data = await api.get('/portfolio/me', token)
+            if (!data) return set({ loading: false }) // token revoked — silently bail
             const portfolio = data?.properties || data?.assets || []
             const totalValue = portfolio.reduce((acc: number, a: any) => acc + (a.current_value || a.current_price || 0), 0)
             const totalInvested = portfolio.reduce((acc: number, a: any) => acc + (a.purchase_price || 0), 0)
@@ -52,7 +53,8 @@ export const usePortfolioStore = create<PortfolioState>((set) => ({
                 total_invested: totalInvested,
                 loading: false,
             })
-        } catch {
+        } catch (e: any) {
+            console.warn('[Portfolio] Fetch error:', e?.message)
             set({ loading: false })
         }
     },

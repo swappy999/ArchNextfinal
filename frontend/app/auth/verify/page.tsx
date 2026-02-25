@@ -16,10 +16,10 @@ export default function VerifyEmailPage() {
 
     const inputRefs = useRef<(HTMLInputElement | null)[]>([])
     const router = useRouter()
-    const { user, verifyEmail } = useAuthStore()
+    const { user, verifyOTP } = useAuthStore()
 
     useEffect(() => {
-        if (!user) {
+        if (!user || !user.email) {
             router.replace('/auth/signin')
         }
 
@@ -79,7 +79,6 @@ export default function VerifyEmailPage() {
             inputRefs.current[pastedData.length]?.focus()
         }
     }
-
     const handleVerify = async (codeStr: string) => {
         if (codeStr.length !== 6) {
             setError('Please enter a valid 6-digit code')
@@ -90,16 +89,9 @@ export default function VerifyEmailPage() {
         setError('')
 
         try {
-            // Simulated validation delay to showcase the cinematic loader
-            await new Promise((resolve) => setTimeout(resolve, 1500))
-
-            // TODO: In production, uncomment the API ping
-            // await api.post('/auth/verify', { code: codeStr })
-
-            // Assume success
-            verifyEmail()
+            if (!user?.email) throw new Error('No email found for verification')
+            await verifyOTP(user.email, codeStr)
             router.push('/auth/wallet')
-
         } catch (err: any) {
             setError(err.message || 'Verification failed. Please check the code.')
         } finally {
@@ -107,11 +99,18 @@ export default function VerifyEmailPage() {
         }
     }
 
-    const handleResend = () => {
-        if (timeLeft > 0) return
-        setTimeLeft(60)
+    const handleResend = async () => {
+        if (timeLeft > 0 || !user?.email) return
+        setLoading(true)
         setError('')
-        // TODO: api.post('/auth/resend-verification')
+        try {
+            await api.post('/auth/resend-verification', { email: user.email })
+            setTimeLeft(60)
+        } catch (err: any) {
+            setError(err.message || 'Failed to resend code.')
+        } finally {
+            setLoading(false)
+        }
     }
 
     const stagger = {

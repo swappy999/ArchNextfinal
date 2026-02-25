@@ -1,6 +1,5 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from app.core.config import settings
-from app.core.security import hash_password
 from app.core.event_listener import lifespan_with_indexer
 from app.api.routes import auth
 from app.api.routes import user
@@ -15,52 +14,56 @@ from app.api.routes import portfolio
 from app.api.routes import analytics
 
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
+from app.core.rate_limiter import limiter, rate_limit_exceeded_handler
 
 app = FastAPI(lifespan=lifespan_with_indexer)
 
-from fastapi import Response
+# ─── Rate Limiter ────────────────────────────────────────────────────────────
+# OWASP: Protects all endpoints against brute-force and DoS attacks.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
+
+# ─── CORS (tightened) ────────────────────────────────────────────────────────
+# OWASP: Only allow specific origins and methods to reduce attack surface.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # SECURITY: no wildcard
+    allow_headers=["Authorization", "Content-Type", "Accept"],  # SECURITY: explicit headers
+)
+
+
+# ─── Security Headers Middleware ─────────────────────────────────────────────
+# OWASP: Prevent clickjacking, XSS, MIME-sniffing, and info leakage.
 @app.middleware("http")
-async def add_cors_header(request, call_next):
-    if request.method == "OPTIONS":
-        return Response(
-            content="OK",
-            headers={
-                "Access-Control-Allow-Origin": "http://localhost:3000",
-                "Access-Control-Allow-Methods": "*",
-                "Access-Control-Allow-Headers": "*",
-                "Access-Control-Allow-Credentials": "true",
-            }
-        )
-    response = await call_next(request)
-    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
-    response.headers["Access-Control-Allow-Credentials"] = "true"
+async def add_security_headers(request: Request, call_next):
+    response: Response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"          # Prevent MIME sniffing
+    response.headers["X-Frame-Options"] = "DENY"                    # Prevent clickjacking
+    response.headers["X-XSS-Protection"] = "1; mode=block"         # Legacy XSS filter
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    # Remove server header to hide implementation details
+    if "server" in response.headers:
+        del response.headers["server"]
     return response
 
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["*"],
-#     allow_credentials=False,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
 
-
+# ─── Root ────────────────────────────────────────────────────────────────────
 @app.get("/")
 def root():
     return {"message": "ArchNext Backend — AI + Blockchain + NFT Marketplace"}
 
-@app.get("/config-test")
-def config_test():
-    return {"app_name": settings.APP_NAME}
+# NOTE: Debug endpoints (/hash-test, /config-test, /cors-test) have been
+# removed. They exposed internal configuration and hashing details.
+# If needed for development, use FastAPI's /docs interface instead.
 
-@app.get("/hash-test")
-def hash_test():
-    return {"hashed": hash_password("hello123")}
-
-@app.get("/cors-test")
-def cors_test():
-    return {"message": "CORS should work here"}
 
 # ─── Routers ─────────────────────────────────────────────────────────────────
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])

@@ -13,7 +13,8 @@ import Link from 'next/link'
 import { usePropertyStore } from '@/store/propertyStore'
 import { usePortfolioStore } from '@/store/portfolioStore'
 import { useMarketplaceStore } from '@/store/marketplaceStore'
-import { useEffect, useState } from 'react'
+import { useDashboardStore } from '@/store/dashboardStore'
+import { useEffect } from 'react'
 import { formatCurrency, cn } from '@/lib/utils'
 
 /* ──────────────────────── ANIMATION PRESET ──────────────────────── */
@@ -25,9 +26,10 @@ const fadeUp = (d = 0) => ({
 
 /* ──────────────────────── MINI CHART ──────────────────────── */
 function MiniChart({ data, color = '#0ea5e9', height = 60 }: { data: number[]; color?: string; height?: number }) {
-    const max = Math.max(...data)
+    if (!data.length) return null
+    const max = Math.max(...data, 1)
     const points = data.map((v, i) => {
-        const x = (i / (data.length - 1)) * 100
+        const x = (i / (data.length - 1 || 1)) * 100
         const y = height - (v / max) * height
         return `${x},${y}`
     }).join(' ')
@@ -45,24 +47,6 @@ function MiniChart({ data, color = '#0ea5e9', height = 60 }: { data: number[]; c
     )
 }
 
-/* ──────────────────────── SPARKLINE BARS ──────────────────────── */
-function SparkBars({ values, color = 'bg-cyan-500' }: { values: number[]; color?: string }) {
-    return (
-        <div className="flex items-end gap-[3px] h-10">
-            {values.map((v, i) => (
-                <motion.div
-                    key={i}
-                    initial={{ height: 0 }}
-                    animate={{ height: `${v * 100}%` }}
-                    transition={{ delay: i * 0.04, duration: 0.6 }}
-                    className={cn("flex-1 rounded-t-sm", color)}
-                    style={{ opacity: 0.35 + v * 0.65 }}
-                />
-            ))}
-        </div>
-    )
-}
-
 /* ──────────────────────── WIDGET WRAPPER ──────────────────────── */
 function Widget({ children, className, delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
     return (
@@ -73,7 +57,6 @@ function Widget({ children, className, delay = 0 }: { children: React.ReactNode;
                 className,
             )}
         >
-            {/* Top edge glow on hover */}
             <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             {children}
         </motion.div>
@@ -81,34 +64,101 @@ function Widget({ children, className, delay = 0 }: { children: React.ReactNode;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   MAIN DASHBOARD
+   MAIN DASHBOARD — Command Portal (Live Data)
    ═══════════════════════════════════════════════════════════════════ */
 export default function DashboardPage() {
     const { properties, fetchProperties, loading: pLoading } = usePropertyStore()
     const { total_current_value, total_invested, assets, fetchPortfolio, loading: portLoading } = usePortfolioStore()
     const { listings, fetchListings, loading: mLoading } = useMarketplaceStore()
+    const { trendingZones, fetchDashboardData, loading: dLoading } = useDashboardStore()
 
     useEffect(() => {
         fetchProperties()
         fetchPortfolio()
         fetchListings()
+        fetchDashboardData()
     }, [])
 
-    const portfolioValue = total_current_value || 1_245_000
-    const investmentScore = 8.7
-    const growthPercent = 12
+    /* ────── COMPUTED LIVE VALUES ────── */
+    const portfolioValue = total_current_value || 0
+    const totalInvested = total_invested || 0
+    const growthPercent = totalInvested > 0 ? ((portfolioValue - totalInvested) / totalInvested * 100).toFixed(1) : '0'
+    const investmentScore = Math.min(9.9, Math.max(0, (portfolioValue > 0 ? 6.5 + (Number(growthPercent) / 10) : 0))).toFixed(1)
+    const scoreLabel = Number(investmentScore) >= 8 ? 'Excellent' : Number(investmentScore) >= 6 ? 'Good' : Number(investmentScore) >= 4 ? 'Fair' : 'Emerging'
 
-    /* ────── MOCK DATA for demo visuals ────── */
-    const chartData = [20, 45, 30, 55, 40, 65, 50, 70, 60, 80, 72, 90]
-    const alerts = [
-        { icon: Truck, text: 'Metro line extension approved', time: '10 min ago', color: 'text-blue-400' },
-        { icon: Flame, text: 'Growth spike in Sector V', time: '20 min ago', color: 'text-amber-400' },
-        { icon: MapPin, text: 'New tech hub development nearby', time: '1 hr ago', color: 'text-emerald-400' },
-    ]
-    const nftCards = [
-        { name: 'Modern Loft', eth: '2.5', price: '$7,300', img: '🏙️' },
-        { name: 'Skyline Penthouse', eth: '3.1', price: '$9,800', img: '🌆' },
-    ]
+    // Derive chart data from property prices (top 12 binned)
+    const priceData = properties.slice(0, 12).map((p: any) => p.price || 0)
+    const chartData = priceData.length ? priceData : [0]
+
+    // Build live alerts from trending zones
+    const alertIcons = [Truck, Flame, MapPin, Activity, Zap]
+    const alertColors = ['text-blue-400', 'text-amber-400', 'text-emerald-400', 'text-cyan-400', 'text-purple-400']
+    const liveAlerts = trendingZones.length > 0
+        ? trendingZones.slice(0, 3).map((z, i) => ({
+            icon: alertIcons[i % alertIcons.length],
+            text: `Zone ${z.grid_key} — Growth ${z.growth_signal.toFixed(1)}%, ${z.property_count} properties`,
+            time: z.tier === 'hot' ? 'Active' : 'Trending',
+            color: alertColors[i % alertColors.length],
+        }))
+        : [
+            { icon: Activity, text: 'Loading intelligence feed...', time: 'Syncing', color: 'text-slate-400' },
+        ]
+
+    // Live marketplace cards (first 2 listings)
+    const nftCards = listings.slice(0, 2).map((l: any) => ({
+        name: l.property_title || l.title || 'Urban Node',
+        eth: l.price_listed_matic ? `${l.price_listed_matic}` : '—',
+        price: formatCurrency(l.price || 0),
+        img: l.image_url || '',
+    }))
+    // Fallback if no listings
+    if (!nftCards.length) {
+        nftCards.push({ name: 'No Active Listings', eth: '—', price: '—', img: '' })
+    }
+
+    // Compute asset breakdown from portfolio assets
+    const computeBreakdown = () => {
+        if (!assets.length) return [
+            { label: 'Residential', pct: 0, color: 'bg-cyan-500' },
+            { label: 'Commercial', pct: 0, color: 'bg-purple-500' },
+            { label: 'Other', pct: 0, color: 'bg-slate-500' },
+        ]
+        let residential = 0, commercial = 0, other = 0
+        assets.forEach((a: any) => {
+            const title = (a.title || '').toLowerCase()
+            if (title.includes('apartment') || title.includes('flat') || title.includes('residential') || title.includes('loft') || title.includes('villa')) residential++
+            else if (title.includes('office') || title.includes('commercial') || title.includes('shop') || title.includes('retail')) commercial++
+            else other++
+        })
+        const total = assets.length || 1
+        return [
+            { label: 'Residential', pct: Math.round((residential / total) * 100), color: 'bg-cyan-500' },
+            { label: 'Commercial', pct: Math.round((commercial / total) * 100), color: 'bg-purple-500' },
+            { label: 'Other', pct: Math.round((other / total) * 100), color: 'bg-slate-500' },
+        ]
+    }
+    const assetBreakdown = computeBreakdown()
+
+    // Dynamic Web3 Timeline based on user's newest asset
+    const currentYear = new Date().getFullYear()
+    const latestAsset = assets.length > 0 ? assets[0] : null // Assuming sorted newest first
+    const isAssetNft = latestAsset?.is_nft || latestAsset?.nft_token_id
+
+    // If they own an asset, all steps are "done" up to Sold.
+    const timelineDone = {
+        minted: !!latestAsset,
+        verified: !!latestAsset,
+        listed: listings.length > 0 || !!latestAsset,
+        sold: !!latestAsset
+    }
+
+    // In a real app, these would come from blockchain graph data. Using relative months for simulation.
+    const tMonth = new Date().getMonth()
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const timelineDates = timelineDone.sold
+        ? [monthNames[Math.max(0, tMonth - 3)], monthNames[Math.max(0, tMonth - 2)], monthNames[Math.max(0, tMonth - 1)], monthNames[tMonth]]
+        : ['---', '---', '---', '---']
+
     const timelineSteps = ['Minted', 'Verified', 'Listed', 'Sold']
 
     return (
@@ -134,7 +184,9 @@ export default function DashboardPage() {
                         <div className="absolute bottom-4 left-6 z-10">
                             <div className="glass-panel rounded-2xl px-5 py-3">
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Portfolio Value</p>
-                                <h3 className="text-2xl font-black text-white tracking-tight">{formatCurrency(portfolioValue)}</h3>
+                                <h3 className="text-2xl font-black text-white tracking-tight">
+                                    {portfolioValue > 0 ? formatCurrency(portfolioValue) : '—'}
+                                </h3>
                             </div>
                         </div>
 
@@ -145,7 +197,7 @@ export default function DashboardPage() {
                                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">AI Investment Score</p>
                                     <div className="flex items-center gap-2">
                                         <span className="text-2xl font-black text-white">{investmentScore}</span>
-                                        <span className="text-xs font-bold text-emerald-400">Excellent</span>
+                                        <span className="text-xs font-bold text-emerald-400">{scoreLabel}</span>
                                     </div>
                                 </div>
                                 <ArrowUpRight size={18} className="text-cyan-400" />
@@ -167,11 +219,13 @@ export default function DashboardPage() {
                                 <Activity size={12} className="text-cyan-400" />
                                 <span className="text-[10px] font-black text-cyan-400 uppercase tracking-wider">Trending Zones</span>
                             </div>
-                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                                <Zap size={12} className="text-amber-400" />
-                                <span className="text-[10px] font-bold text-slate-300">Metro Expansion</span>
-                                <ChevronRight size={12} className="text-slate-500" />
-                            </div>
+                            {trendingZones.slice(0, 1).map((z) => (
+                                <div key={z.grid_key} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                                    <Zap size={12} className="text-amber-400" />
+                                    <span className="text-[10px] font-bold text-slate-300">Zone {z.grid_key}</span>
+                                    <ChevronRight size={12} className="text-slate-500" />
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </Widget>
@@ -186,11 +240,11 @@ export default function DashboardPage() {
                             <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
                                     <Globe size={12} />
-                                    <span>Listings: <span className="text-white font-black">{properties.length || 258}</span></span>
+                                    <span>Listings: <span className="text-white font-black">{properties.length}</span></span>
                                 </div>
                                 <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-400">
                                     <TrendingUp size={12} />
-                                    <span>Growth: +{growthPercent}%</span>
+                                    <span>Growth: {Number(growthPercent) > 0 ? '+' : ''}{growthPercent}%</span>
                                 </div>
                             </div>
                         </div>
@@ -233,16 +287,25 @@ export default function DashboardPage() {
 
                         <div className="flex items-center gap-6">
                             <div>
-                                <span className="text-4xl font-black text-emerald-400 tracking-tighter">+18%</span>
+                                <span className={cn(
+                                    "text-4xl font-black tracking-tighter",
+                                    Number(growthPercent) >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                                )}>
+                                    {Number(growthPercent) > 0 ? '+' : ''}{growthPercent}%
+                                </span>
                             </div>
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2">
                                     <Brain size={14} className="text-purple-400" />
-                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">High Confidence</span>
+                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                        {Number(growthPercent) >= 10 ? 'High Confidence' : 'Moderate Confidence'}
+                                    </span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <ShieldCheck size={14} className="text-emerald-400" />
-                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Low Risk</span>
+                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                        {Number(growthPercent) >= 5 ? 'Low Risk' : 'Moderate Risk'}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -254,14 +317,18 @@ export default function DashboardPage() {
                                 <Cpu size={12} /> Future Growth Projection
                             </p>
                             <ul className="space-y-2">
-                                <li className="flex items-center gap-3 text-xs font-bold text-slate-300">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-cyan-500" />
-                                    Strong Infrastructure Development
-                                </li>
-                                <li className="flex items-center gap-3 text-xs font-bold text-slate-300">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                    Rising Market Demand
-                                </li>
+                                {trendingZones.slice(0, 2).map((z) => (
+                                    <li key={z.grid_key} className="flex items-center gap-3 text-xs font-bold text-slate-300">
+                                        <div className={cn("w-1.5 h-1.5 rounded-full", z.tier === 'hot' ? 'bg-cyan-500' : 'bg-emerald-500')} />
+                                        Zone {z.grid_key}: {z.growth_signal.toFixed(1)}% growth signal
+                                    </li>
+                                ))}
+                                {!trendingZones.length && (
+                                    <li className="flex items-center gap-3 text-xs font-bold text-slate-500">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-slate-600" />
+                                        Loading intelligence data...
+                                    </li>
+                                )}
                             </ul>
                         </div>
 
@@ -285,18 +352,22 @@ export default function DashboardPage() {
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
-                            {nftCards.map((card) => (
-                                <div key={card.name} className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden hover:border-cyan-500/20 transition-colors group/card">
+                            {nftCards.map((card, idx) => (
+                                <div key={idx} className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden hover:border-cyan-500/20 transition-colors group/card">
                                     {/* Card image area */}
-                                    <div className="h-24 bg-gradient-to-br from-blue-900/40 to-indigo-900/40 flex items-center justify-center text-3xl relative">
-                                        {card.img}
-                                        <div className="absolute inset-0 bg-gradient-to-t from-[#0d1117] via-transparent to-transparent" />
+                                    <div className="h-24 bg-gradient-to-br from-blue-900/40 to-indigo-900/40 flex items-center justify-center text-3xl relative overflow-hidden group/img">
+                                        {card.img ? (
+                                            <img src={card.img} alt={card.name} className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover/img:scale-110 transition-transform duration-700" />
+                                        ) : (
+                                            <Building2 size={32} className="text-slate-600" />
+                                        )}
+                                        <div className="absolute inset-0 bg-gradient-to-t from-[#0d1117] via-[#0d1117]/40 to-transparent" />
                                     </div>
                                     <div className="p-3 space-y-2">
                                         <p className="text-xs font-black text-white truncate">{card.name}</p>
                                         <div className="flex items-center justify-between">
                                             <span className="text-[10px] font-bold text-cyan-400 flex items-center gap-1">
-                                                <DiamondIcon size={10} /> {card.eth} ETH
+                                                <DiamondIcon size={10} /> {card.eth} MATIC
                                             </span>
                                             <span className="text-[10px] font-bold text-slate-400">{card.price}</span>
                                         </div>
@@ -327,23 +398,31 @@ export default function DashboardPage() {
                                 <BarChart3 size={14} className="text-cyan-400" />
                                 <span className="text-[10px] font-bold text-slate-400">Total Value</span>
                             </div>
-                            <span className="text-xl font-black text-white tracking-tight">{formatCurrency(portfolioValue)}</span>
-                            <span className="text-xs font-bold text-emerald-400">→ {formatCurrency(portfolioValue * 1.12)}</span>
+                            <span className="text-xl font-black text-white tracking-tight">
+                                {portfolioValue > 0 ? formatCurrency(portfolioValue) : '—'}
+                            </span>
+                            {totalInvested > 0 && (
+                                <span className="text-xs font-bold text-emerald-400">
+                                    Invested: {formatCurrency(totalInvested)}
+                                </span>
+                            )}
                         </div>
 
                         {/* Chart */}
                         <div className="h-[90px]">
-                            <MiniChart data={[30, 40, 35, 55, 48, 60, 52, 75, 68, 80, 72, 95]} color="#22d3ee" height={90} />
+                            <MiniChart
+                                data={assets.length ? assets.map((a: any) => a.current_value || a.current_price || 0) : chartData}
+                                color="#22d3ee"
+                                height={90}
+                            />
                         </div>
 
                         {/* Asset Breakdown */}
                         <div className="space-y-3">
-                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Asset Breakdown</p>
-                            {[
-                                { label: 'Residential', pct: 55, color: 'bg-cyan-500' },
-                                { label: 'Commercial', pct: 30, color: 'bg-purple-500' },
-                                { label: 'Land', pct: 15, color: 'bg-slate-500' },
-                            ].map((a) => (
+                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                Asset Breakdown ({assets.length} nodes)
+                            </p>
+                            {assetBreakdown.map((a) => (
                                 <div key={a.label} className="flex items-center gap-3">
                                     <span className="text-[10px] font-bold text-slate-400 w-20">{a.label}</span>
                                     <div className="flex-1 h-2 bg-white/[0.04] rounded-full overflow-hidden">
@@ -362,16 +441,20 @@ export default function DashboardPage() {
                 </Widget>
 
                 {/* ╔═══════════════════════════════════════════════════╗
-                   ║  6. LIVE ALERTS FEED  (spans 4 cols)             ║
+                   ║  6. LIVE INTEL FEED  (spans 4 cols)             ║
                    ╚═══════════════════════════════════════════════════╝ */}
                 <Widget className="col-span-12 md:col-span-6 lg:col-span-4" delay={0.3}>
                     <div className="p-6 space-y-4">
-                        {/* Urban Intel Feed */}
+                        {/* Urban Intel Feed Chart */}
                         <div className="space-y-4 mb-2">
-                            <MiniChart data={[10, 30, 25, 50, 35, 60, 55, 80, 65, 75]} color="#a855f7" height={40} />
+                            <MiniChart
+                                data={trendingZones.map(z => z.growth_signal * 100).concat(properties.slice(0, 5).map((p: any) => (p.price || 0) / 100000))}
+                                color="#a855f7"
+                                height={40}
+                            />
                         </div>
 
-                        {alerts.map((alert, i) => (
+                        {liveAlerts.map((alert, i) => (
                             <div key={i} className="flex items-center gap-4 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-colors cursor-pointer group/alert">
                                 <alert.icon size={16} className={alert.color} />
                                 <div className="flex-1 min-w-0">
@@ -394,7 +477,7 @@ export default function DashboardPage() {
                             <h2 className="text-lg font-black text-white tracking-tight">Smart Alerts</h2>
                         </div>
 
-                        {alerts.map((alert, i) => (
+                        {liveAlerts.map((alert, i) => (
                             <div key={i} className="flex items-center gap-4 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-colors cursor-pointer">
                                 <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
                                     i === 0 ? 'bg-blue-500/10' : i === 1 ? 'bg-amber-500/10' : 'bg-emerald-500/10',
@@ -419,7 +502,7 @@ export default function DashboardPage() {
 
                         {/* Timeline steps */}
                         <div className="flex items-center justify-between">
-                            {timelineSteps.map((step, i) => (
+                            {timelineSteps.map((step) => (
                                 <div key={step} className="flex flex-col items-center gap-2">
                                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{step}</span>
                                 </div>
@@ -431,18 +514,26 @@ export default function DashboardPage() {
                             <div className="h-1 bg-white/[0.04] rounded-full">
                                 <motion.div
                                     initial={{ width: 0 }}
-                                    animate={{ width: '75%' }}
+                                    animate={{ width: timelineDone.sold ? '100%' : timelineDone.listed ? '75%' : timelineDone.verified ? '50%' : timelineDone.minted ? '25%' : '0%' }}
                                     transition={{ delay: 0.6, duration: 1.2, ease: 'easeOut' }}
-                                    className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full relative"
+                                    className={cn(
+                                        "h-full rounded-full relative",
+                                        isAssetNft
+                                            ? "bg-gradient-to-r from-cyan-500 to-blue-500"
+                                            : "bg-gradient-to-r from-emerald-500 to-emerald-400"
+                                    )}
                                 >
-                                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-cyan-400 border-2 border-[#0d1117] shadow-[0_0_10px_#0ea5e9]" />
+                                    <div className={cn(
+                                        "absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-[#0d1117]",
+                                        isAssetNft ? "bg-cyan-400 shadow-[0_0_10px_#0ea5e9]" : "bg-emerald-400 shadow-[0_0_10px_#34d399]"
+                                    )} />
                                 </motion.div>
                             </div>
 
                             {/* Date labels */}
-                            <div className="flex items-center justify-between mt-3">
-                                {['Jan 2023', 'Feb 2023', 'Mar 2023', 'Apr 2023'].map((d) => (
-                                    <span key={d} className="text-[9px] font-bold text-slate-600">{d}</span>
+                            <div className="flex items-center justify-between mt-3 px-2">
+                                {timelineDates.map((d, i) => (
+                                    <span key={i} className="text-[9px] font-bold text-slate-600">{d}</span>
                                 ))}
                             </div>
                         </div>
@@ -450,10 +541,10 @@ export default function DashboardPage() {
                         {/* Status badges */}
                         <div className="flex gap-2 flex-wrap">
                             {[
-                                { label: 'Minted', icon: Fingerprint, done: true },
-                                { label: 'Verified', icon: CheckCircle2, done: true },
-                                { label: 'Listed', icon: Tag, done: true },
-                                { label: 'Sold', icon: Wallet, done: false },
+                                { label: 'Minted', icon: Fingerprint, done: timelineDone.minted },
+                                { label: 'Verified', icon: CheckCircle2, done: timelineDone.verified },
+                                { label: 'Listed', icon: Tag, done: timelineDone.listed },
+                                { label: 'Acquired', icon: Wallet, done: timelineDone.sold },
                             ].map((s) => (
                                 <div key={s.label} className={cn(
                                     "flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-wider",
