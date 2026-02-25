@@ -85,19 +85,27 @@ export default function Navbar() {
                     <span className="absolute top-3.5 right-3.5 w-2 h-2 rounded-full bg-cyan-500 shadow-[0_0_10px_#06b6d4] border-2 border-[#0B0F1A]" />
                 </button>
 
-                {/* Wallet Connection */}
-                {user && (
-                    <button
-                        onClick={walletIsConnected ? disconnect : connect}
+                {/* Auth / Wallet Status */}
+                {user ? (
+                    <div
                         className={cn(
                             "group flex items-center gap-3 h-11 px-5 rounded-2xl text-[10px] font-black tracking-[0.2em] uppercase transition-all duration-500 border relative overflow-hidden",
-                            walletIsConnected
-                                ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10'
-                                : 'bg-[#0B0F1A] border-white/10 text-slate-300 hover:border-white/20'
+                            "bg-emerald-500/5 border-emerald-500/20 text-emerald-400"
                         )}
                     >
-                        <Wallet size={14} className={cn("relative z-10", walletIsConnected ? "text-emerald-400" : "text-slate-400 group-hover:text-white transition-colors")} />
-                        <span className="relative z-10">{walletIsConnected && address ? shortAddress(address) : 'AUTHENTICATE'}</span>
+                        <Shield size={14} className="text-emerald-400 relative z-10" />
+                        <span className="relative z-10">VERIFIED</span>
+                        {walletIsConnected && address && (
+                            <span className="relative z-10 text-[8px] text-emerald-300/60 ml-1 hidden lg:inline">{shortAddress(address)}</span>
+                        )}
+                    </div>
+                ) : (
+                    <button
+                        onClick={() => router.push('/auth/signin')}
+                        className="group flex items-center gap-3 h-11 px-5 rounded-2xl text-[10px] font-black tracking-[0.2em] uppercase transition-all duration-500 border relative overflow-hidden bg-[#0B0F1A] border-white/10 text-slate-300 hover:border-cyan-500/30 hover:text-white"
+                    >
+                        <Fingerprint size={14} className="text-slate-400 group-hover:text-cyan-400 transition-colors relative z-10" />
+                        <span className="relative z-10">AUTHENTICATE</span>
                     </button>
                 )}
 
