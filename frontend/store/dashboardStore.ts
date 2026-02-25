@@ -14,15 +14,20 @@ interface DashboardState {
     trendingZones: TrendingZone[]
     hotZones: any[]
     loading: boolean
+    _lastFetched: number
     fetchDashboardData: () => Promise<void>
 }
 
-export const useDashboardStore = create<DashboardState>((set) => ({
+export const useDashboardStore = create<DashboardState>((set, get) => ({
     trendingZones: [],
     hotZones: [],
     loading: false,
+    _lastFetched: 0,
 
     fetchDashboardData: async () => {
+        // Skip if data is fresh (< 60s old)
+        const now = Date.now()
+        if (get().trendingZones.length > 0 && now - get()._lastFetched < 60000) return
         set({ loading: true })
         try {
             const [trending, hotZones] = await Promise.all([
@@ -33,6 +38,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
                 trendingZones: Array.isArray(trending) ? trending : [],
                 hotZones: Array.isArray(hotZones) ? hotZones : [],
                 loading: false,
+                _lastFetched: now,
             })
         } catch {
             set({ loading: false })

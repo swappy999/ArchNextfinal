@@ -35,9 +35,9 @@ function NFTCard({ listing, index }: { listing: any, index: number }) {
 
     return (
         <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
+            initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: index * 0.05, duration: 0.6 }}
+            transition={{ delay: index * 0.02, duration: 0.3 }}
             className="group relative flex flex-col rounded-[2.5rem] bg-[#0B0F1A]/80 backdrop-blur-md border border-white/[0.06] hover:border-cyan-500/30 transition-all duration-500 overflow-hidden"
         >
             {/* Holographic Shimmer */}

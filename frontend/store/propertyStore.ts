@@ -18,20 +18,25 @@ interface PropertyState {
     properties: Property[]
     loading: boolean
     error: string | null
+    _lastFetched: number
     fetchProperties: () => Promise<void>
     fetchNearby: (lng: number, lat: number, radius?: number) => Promise<Property[]>
 }
 
-export const usePropertyStore = create<PropertyState>((set) => ({
+export const usePropertyStore = create<PropertyState>((set, get) => ({
     properties: [],
     loading: false,
     error: null,
+    _lastFetched: 0,
 
     fetchProperties: async () => {
+        // Skip if data is fresh (< 60s old)
+        const now = Date.now()
+        if (get().properties.length > 0 && now - get()._lastFetched < 60000) return
         set({ loading: true, error: null })
         try {
             const data = await api.get('/properties/')
-            set({ properties: data, loading: false })
+            set({ properties: data, loading: false, _lastFetched: now })
         } catch (e: any) {
             set({ error: e.message, loading: false })
         }
