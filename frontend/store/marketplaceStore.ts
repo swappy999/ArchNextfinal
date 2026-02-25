@@ -27,16 +27,23 @@ interface MarketplaceState {
     prepareListProperty: (propertyId: string, priceMatic: number) => Promise<any>
 }
 
-export const useMarketplaceStore = create<MarketplaceState>((set) => ({
+export const useMarketplaceStore = create<MarketplaceState>((set, get) => ({
     listings: [],
     loading: false,
     buyingId: null,
+    _lastFetched: 0,
 
     fetchListings: async () => {
+        // Skip if data is fresh (< 30s old)
+        const now = Date.now()
+        const state = get() as any
+        if (state.listings.length > 0 && now - (state._lastFetched || 0) < 30000) {
+            return
+        }
         set({ loading: true })
         try {
             const data = await api.get('/marketplace/listings')
-            set({ listings: Array.isArray(data) ? data : [], loading: false })
+            set({ listings: Array.isArray(data) ? data : [], loading: false, _lastFetched: now } as any)
         } catch {
             set({ loading: false, listings: [] })
         }

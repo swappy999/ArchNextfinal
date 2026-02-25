@@ -1,14 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import Sidebar from './Sidebar'
 import Navbar from './Navbar'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { useAuthStore } from '@/store/authStore'
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
     const router = useRouter()
+    const pathname = usePathname()
     const { accessToken, emailVerified } = useAuthStore()
     const [checked, setChecked] = useState(false)
 
@@ -61,18 +62,15 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                 <Navbar />
 
                 <main className="flex-1 overflow-y-auto overflow-x-hidden relative premium-scroll scroll-smooth">
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key="content"
-                            initial={{ opacity: 0, y: 12 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -12 }}
-                            transition={{ duration: 0.5, ease: [0.2, 0.8, 0.2, 1] }}
-                            className="max-w-[1700px] mx-auto p-6 md:p-8 lg:p-10 pb-24 space-y-10"
-                        >
-                            {children}
-                        </motion.div>
-                    </AnimatePresence>
+                    <motion.div
+                        key={pathname}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.2, ease: 'easeOut' }}
+                        className="max-w-[1700px] mx-auto p-6 md:p-8 lg:p-10 pb-24 space-y-10"
+                    >
+                        {children}
+                    </motion.div>
                 </main>
 
                 {/* Bottom Blur Overlay for better depth */}
