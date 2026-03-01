@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 
 async def create_auction_service(property_id: str, reserve_price: float,
-                                  duration_hours: int, current_user: dict) -> dict:
+                                  duration_hours: int, tx_hash: str, current_user: dict) -> dict:
     """Start an auction for a property."""
     prop = await get_property_by_id(property_id)
     if not prop:
@@ -50,6 +50,7 @@ async def create_auction_service(property_id: str, reserve_price: float,
         "status": "active",
         "current_bid": 0,
         "bid_count": 0,
+        "tx_hash": tx_hash,
     }
 
     auction = await create_auction(auction_data)

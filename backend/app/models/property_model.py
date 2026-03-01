@@ -27,6 +27,8 @@ class PropertyDB(Base):
     # Marketplace / Auction / Verification Extensions
     listing_price_matic = Column(Float, default=0.0)
     listing_price_wei = Column(Float, default=0.0) # Using Float for BigInt approximation or just storing large numbers
+    purchase_price = Column(Float, nullable=True)
+    purchase_price_matic = Column(Float, nullable=True)
     verification_hash = Column(String, nullable=True)
     verification_score = Column(Float, nullable=True)
     last_tx_hash = Column(String, nullable=True)

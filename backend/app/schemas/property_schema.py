@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from typing import List, Optional, Dict
 from datetime import datetime
 
@@ -6,8 +6,12 @@ class PropertyBase(BaseModel):
     title: str
     description: str
     price: float
-    images: List[str] = []
-    features: List[str] = []
+    images: Optional[List[str]] = []
+    features: Optional[List[str]] = []
+
+    @validator("images", "features", pre=True, always=True)
+    def clean_null_lists(cls, v):
+        return v if v is not None else []
 
 class PropertyCreate(PropertyBase):
     latitude: float

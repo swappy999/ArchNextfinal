@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Network } from 'lucide-react'
+import { Bot } from 'lucide-react'
 
 export type AvatarState = 'IDLE' | 'LISTENING' | 'THINKING' | 'SPEAKING' | 'TRANSCRIBING'
 
@@ -69,14 +69,14 @@ export function ArchBotAvatar({ state, className = '' }: ArchBotAvatarProps) {
             {/* Main Avatar Body */}
             <motion.div
                 className={`w-full h-full rounded-full flex items-center justify-center border shadow-[0_0_15px_rgba(6,182,212,0.3)] z-10 transition-colors duration-300 ${isListening ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-400' :
-                        isTranscribing ? 'bg-amber-500/20 border-amber-400/50 text-amber-400' :
-                            isThinking ? 'bg-indigo-500/20 border-indigo-400/50 text-indigo-400' :
-                                'bg-cyan-500/20 border-cyan-500/30 text-cyan-400'
+                    isTranscribing ? 'bg-amber-500/20 border-amber-400/50 text-amber-400' :
+                        isThinking ? 'bg-indigo-500/20 border-indigo-400/50 text-indigo-400' :
+                            'bg-cyan-500/20 border-cyan-500/30 text-cyan-400'
                     }`}
                 animate={isThinking || isTranscribing ? { rotate: 360 } : { rotate: 0 }}
                 transition={{ duration: isTranscribing ? 1 : 3, repeat: Infinity, ease: "linear" }}
             >
-                <Network className="w-1/2 h-1/2" />
+                <Bot className="w-1/2 h-1/2" />
             </motion.div>
         </div>
     )

@@ -14,10 +14,13 @@ from fastapi import HTTPException
 router = APIRouter(prefix="/marketplace", tags=["Marketplace"])
 
 class ListingRequest(BaseModel):
-    price_matic: float  # Price in MATIC
+    price_matic: float | None = None
+    price: float | None = None
+    tx_hash: str | None = None
 
 class BuyRequest(BaseModel):
     price: float
+    price_matic: float | None = None
     tx_hash: str | None = None
 
 @router.get("/listings")
@@ -52,7 +55,7 @@ async def list_property(
     
     Note: Actual buying happens on-chain via MetaMask — no backend involvement.
     """
-    return await list_property_service(property_id, body.price_matic, current_user)
+    return await list_property_service(property_id, body.price_matic, body.price, current_user)
 
 @router.post("/buy/{listing_id}")
 async def buy_listing(
@@ -85,7 +88,7 @@ async def buy_listing(
             await update_property_state(
                 PropertyEvent.PROPERTY_SOLD,
                 listing_id,
-                payload={"buyer_id": user_id, "tx_hash": body.tx_hash}
+                payload={"buyer_id": user_id, "tx_hash": body.tx_hash, "price_matic": body.price_matic, "price": body.price}
             )
             return {
                 "listing_id": listing_id,
@@ -110,7 +113,7 @@ async def buy_listing(
         await update_property_state(
             PropertyEvent.PROPERTY_SOLD,
             listing_id,
-            payload={"buyer_id": user_id}
+            payload={"buyer_id": user_id, "price": body.price}
         )
             
         return {

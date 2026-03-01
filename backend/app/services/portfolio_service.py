@@ -79,9 +79,13 @@ async def get_portfolio(current_user: dict) -> dict:
             "title": prop.get("title"),
             "address": prop.get("address"),
             "current_price": current_price,
+            "current_value": current_price,
+            "purchase_price": prop.get("purchase_price", current_price),
+            "purchase_price_matic": prop.get("purchase_price_matic"),
             "predicted_price": predicted_price,
             "growth_percent": prediction.get("growth_percent", 0),
             "location": prop.get("location"),
+            "is_nft": bool(prop.get("is_nft", False) or token_id is not None),
             # NFT
             "nft_minted": prop.get("nft_minted", False),
             "nft_token_id": token_id,
@@ -91,6 +95,7 @@ async def get_portfolio(current_user: dict) -> dict:
             # Marketplace
             "listed_for_sale": listing_status.get("active", False),
             "listing_price_matic": listing_status.get("price_matic", 0),
+            "price_listed_matic": listing_status.get("price_matic", prop.get("listing_price_matic", prop.get("price_matic", 0))),
             "marketplace": listing_status,
             # Hash/verification
             "blockchain_verified": prop.get("blockchain_verified", False),

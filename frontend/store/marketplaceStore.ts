@@ -31,7 +31,7 @@ interface MarketplaceState {
     buyingId: string | null
     fetchListings: () => Promise<void>
     buy: (listingId: string) => Promise<void>
-    prepareListProperty: (propertyId: string, priceMatic: number) => Promise<any>
+    prepareListProperty: (propertyId: string, priceMatic: number, priceInr: number) => Promise<any>
 }
 
 export const useMarketplaceStore = create<MarketplaceState>((set, get) => ({
@@ -113,6 +113,7 @@ export const useMarketplaceStore = create<MarketplaceState>((set, get) => ({
             const token = useAuthStore.getState().accessToken
             await api.post(`/marketplace/buy/${listingId}`, {
                 price: listing.price,
+                price_matic: listing.is_nft ? listing.price_listed_matic : undefined,
                 tx_hash: txHash
             }, token)
 
@@ -142,11 +143,76 @@ export const useMarketplaceStore = create<MarketplaceState>((set, get) => ({
         }
     },
 
-    prepareListProperty: async (propertyId: string, priceMatic: number) => {
-        const token = useAuthStore.getState().accessToken
-        const res = await api.post(`/marketplace/list/${propertyId}`, { price_matic: priceMatic }, token)
-        const { usePropertyStore } = await import('./propertyStore')
-        await usePropertyStore.getState().syncAll()
-        return res
+    prepareListProperty: async (propertyId: string, priceMatic: number, priceInr: number) => {
+        const toastId = toast.loading('Preparing to list property...')
+        try {
+            const token = useAuthStore.getState().accessToken
+
+            // Get property metadata to check if listed property is an NFT
+            const propRes = await api.get(`/properties/${propertyId}`)
+            const property = propRes.property || propRes
+
+            let txHash = ''
+
+            // ─── On-chain listing if it is an NFT ───────────
+            if (property.is_nft && property.nft_token_id !== undefined && property.nft_token_id !== null) {
+                let marketplaceAddress = ''
+                let nftContractAddress = ''
+
+                try {
+                    const marketplaceAddrData = await import('@/contracts/PropertyMarketplace-address.json')
+                    const nftAddrData = await import('@/contracts/PropertyNFT-address.json')
+                    marketplaceAddress = marketplaceAddrData.address
+                    nftContractAddress = nftAddrData.address
+                } catch (e) {
+                    if (!blockchainProvider.isMock()) throw e
+                }
+
+                if (!blockchainProvider.isMock() && (!marketplaceAddress || marketplaceAddress === '0x0000000000000000000000000000000000000000')) {
+                    throw new Error('Marketplace contract not deployed yet.')
+                }
+
+                toast.loading(blockchainProvider.isMock() ? 'Mock: Approving marketplace for listing...' : 'Please approve marketplace in MetaMask...', { id: toastId })
+
+                // Approve the NFT first
+                if (!blockchainProvider.isMock()) {
+                    const signer = await getEthersSigner()
+                    const nftAbi = await import('@/contracts/PropertyNFT.json')
+                    const nftContract = new ethers.Contract(nftContractAddress, nftAbi.abi, signer)
+                    // The property.nft_token_id is the token to approve
+                    const approveTx = await nftContract.approve(marketplaceAddress, property.nft_token_id)
+                    await approveTx.wait()
+                }
+
+                toast.loading(blockchainProvider.isMock() ? 'Mock: Listing transaction...' : 'Please confirm listing in MetaMask...', { id: toastId })
+
+                const priceWei = ethers.parseEther(priceMatic.toString())
+                const result = await blockchainProvider.listProperty(marketplaceAddress, nftContractAddress, property.nft_token_id, priceWei)
+
+                toast.loading(blockchainProvider.isMock() ? 'Mock: Mining listing transaction...' : 'Mining listing on Polygon Amoy...', { id: toastId })
+                txHash = result.txHash
+            }
+
+            const res = await api.post(`/marketplace/list/${propertyId}`, { price_matic: priceMatic, price: priceInr, tx_hash: txHash }, token)
+
+            toast.success(
+                txHash
+                    ? `Property listed on-chain! TX: ${txHash.slice(0, 10)}...`
+                    : '✅ Property listed successfully!',
+                { id: toastId, duration: 5000 }
+            )
+
+            const { usePropertyStore } = await import('./propertyStore')
+            await usePropertyStore.getState().syncAll()
+
+            // Force refresh listings
+            set({ _lastFetched: 0 } as any)
+            await get().fetchListings()
+            return res
+        } catch (e: any) {
+            console.error('List Property failed:', e)
+            toast.error(parseBlockchainError(e) || 'Failed to list property', { id: toastId })
+            throw e
+        }
     },
 }))

@@ -129,16 +129,70 @@ export const useAuctionStore = create<AuctionState>((set, get) => ({
     },
 
     createAuction: async (propertyId: string, reservePrice: number, durationHours: number) => {
-        const token = useAuthStore.getState().accessToken
-        const res = await api.post(`/auction/create/${propertyId}`, {
-            reserve_price: reservePrice,
-            duration_hours: durationHours,
-        }, token)
-        const { usePropertyStore } = await import('./propertyStore')
-        await usePropertyStore.getState().syncAll()
-        const { usePortfolioStore } = await import('./portfolioStore')
-        usePortfolioStore.getState().fetchPortfolio()
-        return res
+        const toastId = toast.loading('Preparing auction...')
+        try {
+            const token = useAuthStore.getState().accessToken
+
+            // Get property detail for NFT contract info
+            const propRes = await api.get(`/properties/${propertyId}`)
+            const property = propRes.property || propRes
+
+            let txHash = ''
+
+            if (property.is_nft && property.nft_token_id !== undefined && property.nft_token_id !== null) {
+                let auctionContractAddr = ''
+                let nftContractAddr = ''
+
+                try {
+                    const addrData = await import('@/contracts/PropertyAuction-address.json')
+                    auctionContractAddr = addrData.address
+                    const nftData = await import('@/contracts/PropertyNFT-address.json')
+                    nftContractAddr = nftData.address
+                } catch (e) {
+                    if (!blockchainProvider.isMock()) throw e
+                }
+
+                if (!blockchainProvider.isMock() && (!auctionContractAddr || auctionContractAddr === '0x0000000000000000000000000000000000000000')) {
+                    throw new Error('Auction contract not deployed yet.')
+                }
+
+                toast.loading(blockchainProvider.isMock() ? 'Mock: Approving and starting auction...' : 'Confirm auction creation in MetaMask...', { id: toastId })
+
+                // Assume 1 POL reserve price format
+                const reservePriceWei = ethers.parseEther(reservePrice.toString())
+                const durationSeconds = durationHours * 3600
+
+                // Approve the NFT first
+                if (!blockchainProvider.isMock()) {
+                    const signer = await getEthersSigner()
+                    const nftAbi = await import('@/contracts/PropertyNFT.json')
+                    const nftContract = new ethers.Contract(nftContractAddr, nftAbi.abi, signer)
+                    const approveTx = await nftContract.approve(auctionContractAddr, property.nft_token_id)
+                    await approveTx.wait()
+                }
+
+                const result = await blockchainProvider.startAuction(auctionContractAddr, nftContractAddr, property.nft_token_id, reservePriceWei, durationSeconds)
+                txHash = result.txHash
+            }
+
+            const res = await api.post(`/auction/create/${propertyId}`, {
+                reserve_price: reservePrice,
+                duration_hours: durationHours,
+                tx_hash: txHash
+            }, token)
+
+            toast.success('Auction created successfully!', { id: toastId })
+
+            const { usePropertyStore } = await import('./propertyStore')
+            await usePropertyStore.getState().syncAll()
+            const { usePortfolioStore } = await import('./portfolioStore')
+            usePortfolioStore.getState().fetchPortfolio()
+            return res
+        } catch (e: any) {
+            console.error('Failed to create auction:', e)
+            toast.error(parseBlockchainError(e) || 'Failed to create auction', { id: toastId })
+            throw e
+        }
     },
 
     placeBid: async (auctionId: string, amount: number) => {

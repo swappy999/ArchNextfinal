@@ -58,6 +58,10 @@ async def update_property_state(event_type: PropertyEvent, property_id: str, pay
         update_data["owner_id"] = new_owner
         if "tx_hash" in payload:
             update_data["last_tx_hash"] = payload["tx_hash"]
+        if "price_matic" in payload and payload["price_matic"] is not None:
+            update_data["purchase_price_matic"] = payload["price_matic"]
+        if "price" in payload and payload["price"] is not None:
+            update_data["purchase_price"] = payload["price"]
             
     elif event_type == PropertyEvent.DELISTED:
         update_data["listing_price_matic"] = 0

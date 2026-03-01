@@ -128,7 +128,7 @@ async def get_property_listing_service(token_id: int) -> dict:
     on_chain = get_listing(nft_address, token_id)
     return {"token_id": token_id, **on_chain}
 
-async def list_property_service(property_id: str, price_matic: float, current_user: dict) -> dict:
+async def list_property_service(property_id: str, price_matic: float | None, price: float | None, current_user: dict) -> dict:
     """
     Backend-assisted listing: stores listing intent in MongoDB.
     The actual on-chain listing should be done by the frontend via MetaMask.
@@ -144,7 +144,7 @@ async def list_property_service(property_id: str, price_matic: float, current_us
     if not prop.get("nft_token_id") and prop.get("nft_token_id") != 0:
         raise HTTPException(status_code=400, detail="Property must be minted as NFT before listing")
 
-    price_wei = int(price_matic * 1e18)
+    price_wei = int(price_matic * 1e18) if price_matic else 0
     nft_address = getattr(settings, "NFT_CONTRACT_ADDRESS", None)
     marketplace_address = getattr(settings, "MARKETPLACE_ADDRESS", None)
 
@@ -157,6 +157,7 @@ async def list_property_service(property_id: str, price_matic: float, current_us
         property_id,
         payload={
             "price_matic": price_matic,
+            "price": price,
             "user_id": str(current_user["_id"])
         }
     )

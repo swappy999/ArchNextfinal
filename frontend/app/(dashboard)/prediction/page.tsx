@@ -6,6 +6,7 @@ import { Brain, Loader2, TrendingUp, MapPin, Building2, Zap, BarChart2, CheckCir
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import { formatCurrency, cn } from '@/lib/utils'
+import PriceTrendGraph from '@/components/cards/PriceTrendGraph'
 
 interface PredictionResult {
     predicted_price: number
@@ -237,8 +238,17 @@ export default function PredictionPage() {
                                         </div>
                                     </div>
 
+                                    {/* Sub-Card: Price Trend Flow */}
+                                    <div className="mt-6">
+                                        <PriceTrendGraph
+                                            predictedPrice={result.predicted_price}
+                                            fiveYearPrice={result.five_year_forecast}
+                                            tenYearPrice={result.ten_year_forecast}
+                                        />
+                                    </div>
+
                                     {/* Forecast Values */}
-                                    <div className="grid grid-cols-2 gap-4 mt-4">
+                                    <div className="grid grid-cols-2 gap-4 mt-6">
                                         <div className="p-6 rounded-[2rem] bg-indigo-500/10 border border-indigo-500/20 text-center relative overflow-hidden group">
                                             <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-500/20 blur-2xl rounded-full" />
                                             <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-2 relative z-10">5-YR AI Projection</p>

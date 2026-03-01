@@ -99,7 +99,8 @@ function ListingModal({ asset, onClose }: { asset: any, onClose: () => void }) {
                 // Fixed price listing via marketplace
                 const { prepareListProperty } = useMarketplaceStore.getState()
                 if (asset.is_nft) {
-                    const res = await prepareListProperty(asset.id, price)
+                    const priceInr = aiVal?.total_estimated_value || asset.current_value || 0
+                    const res = await prepareListProperty(asset.id || asset.property_id, price, priceInr)
                     // For on-chain NFTs, MetaMask flow
                     const { getEthersSigner } = await import('@/store/walletStore')
                     const { ethers } = await import('ethers')
@@ -124,6 +125,7 @@ function ListingModal({ asset, onClose }: { asset: any, onClose: () => void }) {
                     await listTx.wait()
                     toast.success('Listed on-chain successfully!')
                 } else {
+                    await prepareListProperty(asset.id || asset.property_id, 0, price)
                     toast.success('Property listed on marketplace!')
                 }
             }
@@ -298,18 +300,21 @@ function ListingModal({ asset, onClose }: { asset: any, onClose: () => void }) {
                                     {/* Price input */}
                                     <div className="space-y-2">
                                         <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest">
-                                            {listingType === 'auction' ? 'Reserve Price (₹)' : 'Asking Price (₹)'}
+                                            {listingType === 'auction' ? `Reserve Price (${asset.is_nft ? 'POL' : '₹'})` : `Asking Price (${asset.is_nft ? 'POL' : '₹'})`}
                                         </p>
                                         <div className="relative group/input">
-                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-slate-600">₹</span>
+                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-slate-600">
+                                                {asset.is_nft ? 'POL' : '₹'}
+                                            </span>
                                             <input
                                                 type="number"
                                                 value={askingPrice}
                                                 onChange={(e) => setAskingPrice(e.target.value)}
-                                                placeholder={aiVal ? (aiVal.total_estimated_value || 0).toString() : '0'}
-                                                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl pl-8 pr-4 py-3.5 text-lg font-black text-white placeholder:text-slate-700 focus:outline-none focus:border-cyan-500/50 transition-colors"
+                                                placeholder={asset.is_nft ? '0.00001' : (aiVal ? (aiVal.total_estimated_value || 0).toString() : '0')}
+                                                step={asset.is_nft ? "0.000001" : "1"}
+                                                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl pl-[3.5rem] pr-4 py-3.5 text-lg font-black text-white placeholder:text-slate-700 focus:outline-none focus:border-cyan-500/50 transition-colors"
                                             />
-                                            {aiVal && askingPrice === aiVal.total_estimated_value.toString() && (
+                                            {aiVal && !asset.is_nft && askingPrice === aiVal.total_estimated_value.toString() && (
                                                 <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
                                                     <Brain size={14} className="text-cyan-400 animate-pulse" />
                                                     <span className="text-[9px] font-black text-cyan-400/80 uppercase tracking-widest bg-cyan-500/10 px-2 py-1 rounded-md border border-cyan-500/20">
@@ -393,7 +398,9 @@ function AssetCard({ asset, index, onListClick }: { asset: any, index: number, o
                 </div>
                 <div className="flex flex-col items-end gap-2">
                     {asset.is_nft && (
-                        <span className="text-[9px] font-black px-2.5 py-1 rounded-lg border border-cyan-500/20 bg-cyan-500/10 text-cyan-400 uppercase tracking-widest shadow-lg">NFT ASSET</span>
+                        <span className="text-[9px] font-black px-2.5 py-1 rounded-lg border border-cyan-500/20 bg-cyan-500/10 text-cyan-400 uppercase tracking-widest shadow-lg">
+                            NFT #{asset.nft_token_id !== undefined && asset.nft_token_id !== null ? asset.nft_token_id : '---'}
+                        </span>
                     )}
                     {asset.status === 'available' && (
                         <span className="text-[9px] font-black px-2.5 py-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 uppercase tracking-widest shadow-lg animate-pulse">LISTED</span>
@@ -411,15 +418,25 @@ function AssetCard({ asset, index, onListClick }: { asset: any, index: number, o
                 </div>
             </div>
 
-            <div className="flex items-end justify-between pt-6 border-t border-white/[0.04]">
-                <div className="space-y-1">
-                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.2em]">Live Valuation</p>
-                    <p className="text-2xl font-black text-white tracking-tighter group-hover:text-cyan-400 transition-colors">
-                        {formatCurrency(asset.current_value || 0)}
-                    </p>
+            <div className="flex flex-col gap-4 pt-6 border-t border-white/[0.04]">
+                {/* Values Row */}
+                <div className="flex items-end justify-between">
+                    <div className="space-y-1">
+                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.2em]">Live Valuation</p>
+                        <p className="text-2xl font-black text-white tracking-tighter group-hover:text-cyan-400 transition-colors">
+                            {asset.price_listed_matic && asset.price_listed_matic > 0 ? `${asset.price_listed_matic} POL` : formatCurrency(asset.current_value || 0)}
+                        </p>
+                    </div>
+
+                    <div className="space-y-1 text-right">
+                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.2em]">Purchased For</p>
+                        <p className="text-lg font-black text-slate-400 tracking-tighter group-hover:text-slate-300 transition-colors">
+                            {asset.purchase_price_matic && asset.purchase_price_matic > 0 ? `${asset.purchase_price_matic} POL` : formatCurrency(asset.purchase_price || 0)}
+                        </p>
+                    </div>
                 </div>
 
-                <div className="flex flex-col items-end gap-3">
+                <div className="flex items-center justify-between">
                     <div className={cn(
                         "flex items-center gap-1 px-4 py-2 rounded-2xl border transition-all duration-500 text-[11px] font-black tracking-widest uppercase",
                         isPositive ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400' : 'bg-rose-500/5 border-rose-500/10 text-rose-400'

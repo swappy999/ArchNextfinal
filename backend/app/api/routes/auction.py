@@ -15,6 +15,7 @@ router = APIRouter(prefix="/auction", tags=["Auction"])
 class CreateAuctionRequest(BaseModel):
     reserve_price: float
     duration_hours: int = 24  # Default 24h auction
+    tx_hash: str = ""  # On-chain transaction hash
 
 
 class PlaceBidRequest(BaseModel):
@@ -33,7 +34,7 @@ async def create_auction(
     Seller sets reserve price and duration.
     """
     return await create_auction_service(
-        property_id, body.reserve_price, body.duration_hours, current_user
+        property_id, body.reserve_price, body.duration_hours, body.tx_hash, current_user
     )
 
 
