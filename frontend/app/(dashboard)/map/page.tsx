@@ -6,10 +6,11 @@ import {
     Layers, Thermometer, Navigation2, Activity,
     TrendingUp, Crosshair, Zap, Scan, Globe,
     ShieldCheck, Eye, EyeOff, Hexagon, Radio,
-    Building2, Maximize, ChevronRight
+    Building2, Maximize, ChevronRight, Brain
 } from 'lucide-react'
 import { useMapStore } from '@/store/mapStore'
 import { formatCurrencyCompact } from '@/lib/utils'
+import { api } from '@/lib/api'
 import Map, { MapRef, useControl } from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { MapboxOverlay } from '@deck.gl/mapbox'
@@ -27,13 +28,18 @@ export default function MapPage() {
     const animFrameRef = useRef<number>(0)
     const [mapError, setMapError] = useState(false)
     const [mapLoaded, setMapLoaded] = useState(false)
+    const [clickPred, setClickPred] = useState<any>(null)
+    const [clickLoading, setClickLoading] = useState(false)
+    const [clickArea, setClickArea] = useState<string>("1500")
 
     const {
         viewport, activeLayers, hoverInfo, viewMode,
         clusters, heatmap, zones, pulsePoints, currentZone,
-        loading, cinematicEntry, propertyCount,
+        loading, cinematicEntry, propertyCount, mlGeoJson,
         setBounds, toggleLayer, setHoverInfo,
         setViewMode, setCinematicEntry, setViewport,
+        synthMode, setSynthMode,
+        selectedFeature, setSelectedFeature
     } = useMapStore()
 
     // Local viewState to track user interaction 
@@ -55,41 +61,42 @@ export default function MapPage() {
             const sourceId = m.getSource('carto') ? 'carto' : 'composite'
 
             if (m.getSource(sourceId)) {
-                m.addLayer({
-                    id: '3d-buildings',
-                    source: sourceId,
-                    'source-layer': 'building',
-                    filter: ['==', 'extrude', 'true'],
-                    type: 'fill-extrusion',
-                    minzoom: 13,
-                    paint: {
-                        'fill-extrusion-color': [
-                            'interpolate', ['linear'], ['get', 'height'],
-                            0, '#0a1628',
-                            50, '#0c2d5e',
-                            150, '#0ea5e9',
-                        ],
-                        'fill-extrusion-height': [
-                            'interpolate', ['linear'], ['zoom'],
-                            13, 0, 13.05, ['get', 'height']
-                        ],
-                        'fill-extrusion-base': [
-                            'interpolate', ['linear'], ['zoom'],
-                            13, 0, 13.05, ['get', 'min_height']
-                        ],
-                        'fill-extrusion-opacity': 0.45,
-                    },
-                })
+                if (!m.getLayer('3d-buildings')) {
+                    m.addLayer({
+                        id: '3d-buildings',
+                        source: sourceId,
+                        'source-layer': 'building',
+                        filter: ['==', 'extrude', 'true'],
+                        type: 'fill-extrusion',
+                        minzoom: 13,
+                        paint: {
+                            'fill-extrusion-color': [
+                                'interpolate', ['linear'], ['get', 'height'],
+                                0, '#0a1628',
+                                50, '#0c2d5e',
+                                150, '#0ea5e9',
+                            ],
+                            'fill-extrusion-height': [
+                                'interpolate', ['linear'], ['zoom'],
+                                13, 0, 13.05, ['get', 'height']
+                            ],
+                            'fill-extrusion-base': [
+                                'interpolate', ['linear'], ['zoom'],
+                                13, 0, 13.05, ['get', 'min_height']
+                            ],
+                            'fill-extrusion-opacity': 0.45,
+                        }
+                    })
+                }
             }
         } catch (err) {
             console.log('[Map] 3D buildings not available on this tile provider style')
         }
 
-        const labelLayers = m.getStyle().layers?.filter(
-            (l: any) => l.type === 'symbol' && (l.id.includes('label') || l.id.includes('place'))
-        ) || []
-        labelLayers.forEach((l: any) => {
-            m.setPaintProperty(l.id, 'text-opacity', 0.3)
+        // 0. CLEANUP: Remove any legacy style-based layers that might persist in style memory
+        const legacyLayers = ['heatmap-layer', 'thermal-heatmap', 'property-heatmap', 'ward-heatmap']
+        legacyLayers.forEach(l => {
+            if (m.getLayer(l)) m.removeLayer(l)
         })
 
         setMapLoaded(true)
@@ -143,6 +150,33 @@ export default function MapPage() {
         })
     }, [setBounds])
 
+    // ─── Click Prediction Handler ─────────────────────────────────────────
+    const onMapClick = useCallback(async (e: any) => {
+        // Ignore clicks if they intercept deck.gl layer picks 
+        // (deck.gl handles its own hover/click logic separately over the base map)
+        if (e.originalEvent.target.classList.contains('mapboxgl-canvas-container')) {
+            return;
+        }
+
+        const { lng, lat } = e.lngLat;
+        setClickLoading(true);
+        try {
+            const res = await api.post('/prediction/predict-price', { lat, lng });
+            setClickPred({
+                lat: lat,
+                lng: lng,
+                price_sqft: res.predicted_price,
+                zone: res.zone,
+                ward: res.ward
+            });
+        } catch (err) {
+            console.error("AI Price Prediction Error:", err);
+            setClickPred({ error: "Location outside modeling bounds or service error" });
+        } finally {
+            setClickLoading(false);
+        }
+    }, []);
+
     // ─── View Mode Toggle ─────────────────────────────────────────────────
     useEffect(() => {
         if (!mapLoaded || !mapRef.current) return
@@ -164,156 +198,204 @@ export default function MapPage() {
         }
     }, [activeLayers.buildings, mapLoaded])
 
-    // ─── deck.gl Layers ───────────────────────────────────────────────────
+    // ─── deck.gl Layers: Strict Isolation & Optimization ──────────────────
     const deckLayers = useMemo(() => {
         const layers: any[] = []
 
-        // Layer 2 — AI Heat Intelligence
-        if (activeLayers.heatmap && heatmap.length > 0) {
+        // Layer 1 — Thermal Intelligence (City-Wide Heatmap)
+        // Strictly isolated to the heatmap toggle
+        if (activeLayers.heatmap && heatmap && heatmap.length > 0) {
             layers.push(
                 new HeatmapLayer({
-                    id: 'heat-intelligence',
+                    id: 'thermal-intel-layer',
                     data: heatmap,
                     getPosition: (d: any) => [d.longitude, d.latitude],
-                    getWeight: (d: any) => d.weight || 1,
-                    radiusPixels: 60,
-                    intensity: 1.2,
-                    threshold: 0.05,
+                    getWeight: (d: any) => d.weight || 0,
+                    radiusPixels: 100, // Balanced radius for city-wide view
+                    intensity: 2.0,
+                    threshold: 0.1,
                     colorRange: [
-                        [6, 25, 60, 40],       // deep dark blue
-                        [14, 165, 233, 100],    // cyan-500
-                        [34, 211, 238, 160],     // cyan-400
-                        [34, 211, 238, 200],     // cyan glow
-                        [103, 232, 249, 220],    // bright cyan
-                        [165, 243, 252, 255],    // white-cyan
+                        [6, 25, 60, 0],          // Transparent
+                        [14, 165, 233, 100],     // Cyan-500
+                        [34, 211, 238, 160],     // Cyan-400
+                        [34, 211, 238, 200],     // Cyan glow
+                        [103, 232, 249, 220],    // Bright cyan
+                        [165, 243, 252, 255],    // White-cyan
                     ],
                     aggregation: 'SUM',
+                    updateTriggers: {
+                        getWeight: [heatmap]
+                    }
                 })
             )
         }
 
-        // Layer 3 — Smart Zones (Extruded Polygons)
-        if (activeLayers.zones && zones.length > 0) {
+        // Layer 6 — AI Synthesis Heatmap (ML-driven)
+        if (activeLayers.synth && mlGeoJson?.features) {
+            // Use real property nodes for high-fidelity synthesis instead of sparse grid points
+            const propFeatures = mlGeoJson.features.filter((f: any) => !f.properties.is_grid);
+
+            layers.push(
+                new HeatmapLayer({
+                    id: 'ai-synthesis-layer',
+                    data: propFeatures,
+                    getPosition: (d: any) => d.geometry.coordinates,
+                    getWeight: (d: any) => {
+                        const p = d.properties;
+                        if (synthMode === 'infra') return p.infra_score || 0;
+                        if (synthMode === 'mobility') return p.access_score || 0;
+                        if (synthMode === 'demand') return p.demand_score || 0;
+                        // Default: Market Value normalized
+                        return (p.price_index || 0) / 20000;
+                    },
+                    radiusPixels: 80,
+                    intensity: 2.0,
+                    threshold: 0.05,
+                    colorRange: [
+                        [10, 20, 40, 0],
+                        [6, 182, 212, 120],  // Cyan
+                        [59, 130, 246, 180], // Blue
+                        [139, 92, 246, 220], // Violet
+                        [236, 72, 153, 255]  // Pink (Peak)
+                    ],
+                    updateTriggers: {
+                        getWeight: [synthMode]
+                    }
+                })
+            )
+        }
+
+        // Layer 2 — Ward Boundaries (2D / Reference)
+        if (activeLayers.zones && zones && zones.length > 0) {
             layers.push(
                 new PolygonLayer({
-                    id: 'smart-zones',
+                    id: 'ward-polygon-layer',
                     data: zones,
                     getPolygon: (d: any) => d.polygon,
-                    getFillColor: (d: any) => {
-                        const g = d.growth_score || 0
-                        if (g > 70) return [14, 165, 233, 50]    // cyan premium
-                        if (g > 40) return [99, 102, 241, 40]     // indigo high
-                        return [51, 65, 85, 30]                     // slate standard
-                    },
-                    getLineColor: (d: any) => {
-                        const g = d.growth_score || 0
-                        if (g > 70) return [14, 165, 233, 120]
-                        if (g > 40) return [99, 102, 241, 80]
-                        return [51, 65, 85, 60]
-                    },
-                    getElevation: (d: any) => d.elevation || 0,
-                    extruded: true,
+                    getFillColor: [14, 165, 233, 40],
+                    getLineColor: [14, 165, 233, 100],
+                    getElevation: 0,
+                    extruded: false,
                     wireframe: true,
                     lineWidthMinPixels: 1,
                     pickable: true,
+                    onClick: (info: any) => {
+                        if (info.object) {
+                            setSelectedFeature(info.object)
+                        } else {
+                            setSelectedFeature(null)
+                        }
+                    },
                     onHover: (info: any) => {
                         if (info.object) {
                             setHoverInfo({ x: info.x, y: info.y, object: info.object, layer: 'zones' })
                         } else {
                             setHoverInfo(null)
                         }
+                    }
+                })
+            )
+        }
+
+        // Layer 5 — 3D Structures (Extruded Wards / Buildings)
+        // Strictly isolated to the buildings toggle
+        if (activeLayers.buildings && zones && zones.length > 0) {
+            layers.push(
+                new PolygonLayer({
+                    id: '3d-structures-layer',
+                    data: zones,
+                    getPolygon: (d: any) => d.polygon,
+                    getFillColor: (d: any) => {
+                        const g = d.growth_score || 0
+                        if (g > 70) return [14, 165, 233, 120]    // High growth
+                        return [51, 65, 100, 80]                  // Standard
+                    },
+                    getLineColor: [255, 255, 255, 20],
+                    getElevation: (d: any) => d.elevation || 100,
+                    extruded: viewMode === '3d',
+                    wireframe: true,
+                    pickable: true,
+                    material: {
+                        ambient: 0.2,
+                        diffuse: 0.6,
+                        shininess: 32,
+                        specularColor: [60, 60, 60]
                     },
                     transitions: {
                         getElevation: { duration: 1000, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-                        getFillColor: { duration: 800 },
                     },
+                    updateTriggers: {
+                        getElevation: [viewMode]
+                    }
                 })
             )
         }
 
-        // Layer 4 — Property Scatterplot
-        if (activeLayers.properties && clusters.length > 0) {
+        // Layer 3 — Property Nodes (Scatterplot)
+        if (activeLayers.properties && mlGeoJson?.features) {
+            const propFeatures = mlGeoJson.features.filter((f: any) => !f.properties.is_grid);
+
             layers.push(
                 new ScatterplotLayer({
-                    id: 'property-nodes',
-                    data: clusters,
-                    getPosition: (d: any) => [d.centroid.longitude, d.centroid.latitude],
-                    getRadius: (d: any) => 30 + (d.count || 1) * 15,
-                    getFillColor: [14, 165, 233, 160],
-                    getLineColor: [14, 165, 233, 255],
+                    id: 'property-nodes-layer',
+                    data: propFeatures,
+                    getPosition: (d: any) => d.geometry.coordinates,
+                    getRadius: (d: any) => d.properties.tier === 'premium' ? 60 : 30,
+                    getFillColor: (d: any) => {
+                        const s = d.properties.status;
+                        if (s === 'owned') return [59, 130, 246, 160];    // Blue
+                        if (s === 'auction') return [168, 85, 247, 160];  // Purple
+                        if (s === 'sold') return [239, 68, 68, 160];      // Red
+                        if (s === 'listed') return [245, 158, 11, 160];    // Amber
+                        if (s === 'verified') return [6, 182, 212, 160];  // Cyan
+                        return [16, 185, 129, 160];                       // Green (Available/Default)
+                    },
+                    getLineColor: (d: any) => {
+                        const s = d.properties.status;
+                        if (s === 'owned') return [59, 130, 246, 255];    // Blue
+                        if (s === 'auction') return [168, 85, 247, 255];  // Purple
+                        if (s === 'sold') return [239, 68, 68, 255];      // Red
+                        if (s === 'listed') return [245, 158, 11, 255];    // Amber
+                        if (s === 'verified') return [6, 182, 212, 255];  // Cyan
+                        return [16, 185, 129, 255];                       // Green (Available/Default)
+                    },
                     lineWidthMinPixels: 1,
                     stroked: true,
                     filled: true,
-                    radiusScale: 1,
-                    radiusMinPixels: 4,
-                    radiusMaxPixels: 40,
+                    radiusMinPixels: 6,
                     pickable: true,
-                    antialiasing: true,
                     onHover: (info: any) => {
                         if (info.object) {
-                            setHoverInfo({ x: info.x, y: info.y, object: info.object, layer: 'properties' })
+                            setHoverInfo({ x: info.x, y: info.y, object: info.object.properties, layer: 'properties' })
                         } else {
                             setHoverInfo(null)
                         }
-                    },
-                    transitions: {
-                        getRadius: { duration: 600 },
-                    },
-                })
-            )
-
-            // Inner glow dots
-            layers.push(
-                new ScatterplotLayer({
-                    id: 'property-glow',
-                    data: clusters,
-                    getPosition: (d: any) => [d.centroid.longitude, d.centroid.latitude],
-                    getRadius: (d: any) => 15 + (d.count || 1) * 8,
-                    getFillColor: [103, 232, 249, 120],
-                    filled: true,
-                    radiusMinPixels: 2,
-                    radiusMaxPixels: 20,
-                    pickable: false,
+                    }
                 })
             )
         }
 
-        // Layer 5 — Urban Pulse Points
-        if (activeLayers.pulse && pulsePoints.length > 0) {
+        // Layer 4 — Urban Pulse (Aggregated Ward Metrics)
+        if (activeLayers.pulse && zones && zones.length > 0) {
             layers.push(
                 new ScatterplotLayer({
-                    id: 'urban-pulse-outer',
-                    data: pulsePoints,
-                    getPosition: (d: any) => [d.longitude, d.latitude],
-                    getRadius: (d: any) => (d.radius || 300) * 1.5,
-                    getFillColor: [14, 165, 233, 20],
-                    getLineColor: [14, 165, 233, 60],
+                    id: 'urban-pulse-layer',
+                    data: zones,
+                    getPosition: (d: any) => d.centroid,
+                    getRadius: (d: any) => (d.thermal_index || 0) * 1000,
+                    getFillColor: (d: any) => [14, 165, 233, (d.thermal_index || 0.1) * 100],
+                    getLineColor: [14, 165, 233, 150],
                     stroked: true,
                     filled: true,
                     lineWidthMinPixels: 1,
-                    radiusMinPixels: 20,
-                    radiusMaxPixels: 200,
-                    pickable: false,
-                })
-            )
-
-            layers.push(
-                new ScatterplotLayer({
-                    id: 'urban-pulse-inner',
-                    data: pulsePoints,
-                    getPosition: (d: any) => [d.longitude, d.latitude],
-                    getRadius: (d: any) => (d.radius || 300) * 0.4,
-                    getFillColor: [34, 211, 238, 50],
-                    filled: true,
-                    radiusMinPixels: 8,
-                    radiusMaxPixels: 80,
+                    radiusMinPixels: 10,
                     pickable: false,
                 })
             )
         }
 
         return layers
-    }, [activeLayers, heatmap, zones, clusters, pulsePoints, setHoverInfo])
+    }, [activeLayers, heatmap, zones, mlGeoJson, pulsePoints, viewMode, setHoverInfo, synthMode])
 
     // DeckGL overlay hook for react-map-gl: create only ONCE
     const deckControl = useMemo(() => {
@@ -323,7 +405,7 @@ export default function MapPage() {
         })
     }, [])
 
-    // Apply overlay to map and update layers continuously
+    // Apply overlay to map and update layers strictly
     useEffect(() => {
         if (mapRef.current && mapLoaded && deckControl) {
             const map = mapRef.current.getMap()
@@ -331,9 +413,9 @@ export default function MapPage() {
                 map.addControl(deckControl as any)
             }
 
-            // Re-sync props to force a redraw if layers changed
+            // Sync layers strictly based on visibility state
             deckControl.setProps({
-                layers: [...(deckLayers as any[])]
+                layers: [...deckLayers]
             })
         }
     }, [deckControl, mapLoaded, deckLayers])
@@ -341,10 +423,11 @@ export default function MapPage() {
     // ─── Layer Config ─────────────────────────────────────────────────────
     const layerConfig = [
         { id: 'heatmap', label: 'Thermal Intel', icon: Thermometer, color: 'cyan' },
-        { id: 'zones', label: 'Smart Zones', icon: Hexagon, color: 'indigo' },
+        { id: 'zones', label: 'Ward Boundaries', icon: Hexagon, color: 'indigo' },
         { id: 'properties', label: 'Property Nodes', icon: Navigation2, color: 'emerald' },
         { id: 'pulse', label: 'Urban Pulse', icon: Radio, color: 'amber' },
         { id: 'buildings', label: '3D Structures', icon: Building2, color: 'blue' },
+        { id: 'synth', label: 'AI Synthesis', icon: Brain, color: 'rose' },
     ]
 
     const colorMap: Record<string, string> = {
@@ -353,9 +436,12 @@ export default function MapPage() {
         emerald: 'text-emerald-400',
         amber: 'text-amber-400',
         blue: 'text-blue-400',
+        rose: 'text-rose-400',
     }
 
     const activeCount = Object.values(activeLayers).filter(Boolean).length
+    const displayZone = (selectedFeature?.polygon ? selectedFeature : currentZone) || { count: 0, growth_score: 0, avg_price: 0, thermal_index: 0, tier: 'unknown' };
+
 
     return (
         <div className="h-[calc(100vh-140px)] flex flex-col space-y-4">
@@ -410,6 +496,8 @@ export default function MapPage() {
                         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
                         onLoad={onMapLoad}
                         onMoveEnd={onMoveEnd}
+                        onClick={onMapClick}
+                        interactiveLayerIds={[]} // Let DeckGL handle properties
                         reuseMaps
                     />
                 </div>
@@ -490,81 +578,169 @@ export default function MapPage() {
                                     )
                                 })}
                             </div>
+
                         </motion.div>
                     )}
                 </AnimatePresence>
 
-                {/* Right — Zone Intelligence Panel */}
+
+                {/* Right — Zone Intelligence Panel & Synth Strategy */}
                 <AnimatePresence>
-                    {cinematicEntry && currentZone && currentZone.count > 0 && (
+                    {cinematicEntry && (
                         <motion.div
                             initial={{ opacity: 0, x: 40 }}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 40 }}
                             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                            className="absolute top-6 right-6 z-20 w-72"
+                            className="absolute top-6 right-6 z-20 w-72 flex flex-col gap-4"
                         >
-                            <div className="bg-[#0a0e1a]/80 backdrop-blur-2xl p-5 rounded-2xl border border-white/[0.06] shadow-[0_8px_40px_rgba(0,0,0,0.5)] relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 blur-3xl -translate-y-1/2 translate-x-1/2" />
+                            {/* Zone Intelligence Panel */}
+                            {displayZone && displayZone.count > 0 && (
+                                <div className="bg-[#0a0e1a]/80 backdrop-blur-2xl p-5 rounded-2xl border border-white/[0.06] shadow-[0_8px_40px_rgba(0,0,0,0.5)] relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 blur-3xl -translate-y-1/2 translate-x-1/2" />
 
-                                <div className="flex items-center justify-between mb-5 relative z-10">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />
-                                        <span className="text-[9px] font-black uppercase tracking-[0.15em] text-slate-500">Zone Intel</span>
+                                    <div className="flex items-center justify-between mb-5 relative z-10">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />
+                                            <span className="text-[9px] font-black uppercase tracking-[0.15em] text-slate-500 border-b border-white/[0.1] pb-0.5">
+                                                {displayZone.name || 'City Intelligence'}
+                                            </span>
+                                        </div>
+                                        <div className={cn(
+                                            "px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest border",
+                                            displayZone.tier === 'premium' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                                                displayZone.tier === 'high' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                                    'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                        )}>
+                                            {displayZone.tier || 'STANDARD'}
+                                        </div>
                                     </div>
-                                    <div className={cn(
-                                        "px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest border",
-                                        currentZone.tier === 'premium' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                                            currentZone.tier === 'high' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                                'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                                    )}>
-                                        {currentZone.tier}
-                                    </div>
-                                </div>
 
-                                <div className="space-y-6 relative z-10">
-                                    <div className="flex items-end justify-between">
-                                        <div>
-                                            <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">Growth Score</p>
-                                            <div className="flex items-baseline gap-2">
-                                                <h3 className="text-3xl font-black text-white tracking-tighter">{currentZone.growth_score}</h3>
-                                                <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
-                                                    <TrendingUp size={10} /> +12%
-                                                </span>
+                                    <div className="space-y-6 relative z-10">
+                                        <div className="flex items-end justify-between">
+                                            <div>
+                                                <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">Thermal Index</p>
+                                                <div className="flex items-baseline gap-2">
+                                                    <h3 className="text-3xl font-black text-white tracking-tighter">{displayZone.thermal_index || 0}</h3>
+                                                    <span className="text-[10px] font-bold text-cyan-400 flex items-center gap-1">
+                                                        <Zap size={10} /> AI Score
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="w-14 h-8 flex items-end gap-[2px]">
+                                                {[0.4, 0.6, 0.5, 0.8, 0.7, 0.9].map((h, i) => (
+                                                    <motion.div
+                                                        key={i}
+                                                        initial={{ height: 0 }}
+                                                        animate={{ height: `${h * 100}%` }}
+                                                        transition={{ delay: i * 0.08, duration: 0.5 }}
+                                                        className="flex-1 bg-cyan-500/30 rounded-t-sm"
+                                                    />
+                                                ))}
                                             </div>
                                         </div>
-                                        <div className="w-14 h-8 flex items-end gap-[2px]">
-                                            {[0.4, 0.6, 0.5, 0.8, 0.7, 0.9].map((h, i) => (
-                                                <motion.div
-                                                    key={i}
-                                                    initial={{ height: 0 }}
-                                                    animate={{ height: `${h * 100}%` }}
-                                                    transition={{ delay: i * 0.08, duration: 0.5 }}
-                                                    className="flex-1 bg-cyan-500/30 rounded-t-sm"
-                                                />
-                                            ))}
-                                        </div>
-                                    </div>
 
-                                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/[0.04]">
-                                        <div>
-                                            <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-0.5">Median Val</p>
-                                            <p className="text-base font-bold text-slate-300 tracking-tight">
-                                                {formatCurrencyCompact(currentZone.avg_price)}
-                                            </p>
+                                        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/[0.04]">
+                                            <div>
+                                                <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-0.5">Median Val</p>
+                                                <p className="text-base font-bold text-slate-300 tracking-tight">
+                                                    {formatCurrencyCompact(displayZone.avg_price || 0)}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-0.5">Node Count</p>
+                                                <p className="text-base font-bold text-slate-300 tracking-tight">{displayZone.count || 0}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-0.5">Node Count</p>
-                                            <p className="text-base font-bold text-slate-300 tracking-tight">{currentZone.count}</p>
-                                        </div>
-                                    </div>
 
-                                    <button className="w-full py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] text-[9px] font-black text-cyan-400 uppercase tracking-[0.15em] hover:bg-cyan-500/10 hover:border-cyan-500/20 transition-all flex items-center justify-center gap-2">
-                                        <Zap size={12} /> Deep Scan
-                                        <ChevronRight size={12} />
-                                    </button>
+                                        {/* AI Parameter Sub-grid */}
+                                        {displayZone.ml_profile && (
+                                            <div className="grid grid-cols-3 gap-2 pt-4 border-t border-white/[0.04]">
+                                                <div className="text-center">
+                                                    <p className="text-[7px] font-black text-slate-600 uppercase">Infra</p>
+                                                    <p className="text-[10px] font-bold text-cyan-400">{Math.round(displayZone.ml_profile.infra_score * 100)}%</p>
+                                                </div>
+                                                <div className="text-center border-x border-white/[0.04]">
+                                                    <p className="text-[7px] font-black text-slate-600 uppercase">Mobility</p>
+                                                    <p className="text-[10px] font-bold text-blue-400">{Math.round(displayZone.ml_profile.access_score * 100)}%</p>
+                                                </div>
+                                                <div className="text-center">
+                                                    <p className="text-[7px] font-black text-slate-600 uppercase">Demand</p>
+                                                    <p className="text-[10px] font-bold text-amber-400">{Math.round(displayZone.ml_profile.demand_score * 100)}%</p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <button
+                                            onClick={() => {
+                                                if (displayZone) {
+                                                    let target: [number, number] | null = null;
+
+                                                    if (displayZone.centroid) {
+                                                        target = [displayZone.centroid[0], displayZone.centroid[1]];
+                                                    } else if (displayZone.polygon && displayZone.polygon.length > 0) {
+                                                        target = [displayZone.polygon[0][0], displayZone.polygon[0][1]];
+                                                    } else {
+                                                        // Fallback to center of viewport
+                                                        target = [viewport.longitude, viewport.latitude]
+                                                    }
+
+                                                    if (target) {
+                                                        mapRef.current?.getMap().flyTo({
+                                                            center: target,
+                                                            zoom: 15.5,
+                                                            pitch: 65,
+                                                            bearing: -30,
+                                                            duration: 2500,
+                                                            essential: true
+                                                        });
+                                                        setViewMode('3d');
+                                                    }
+                                                }
+                                            }}
+                                            className="w-full py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] text-[9px] font-black text-cyan-400 uppercase tracking-[0.15em] hover:bg-cyan-500/10 hover:border-cyan-500/20 transition-all flex items-center justify-center gap-2">
+                                            <Zap size={12} /> Deep Scan
+                                            <ChevronRight size={12} />
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
+
+                            {/* Synth Strategy Selector (Independent of Zone count) */}
+                            <AnimatePresence>
+                                {activeLayers.synth && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: -10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                        className="bg-[#0a0e1a]/80 backdrop-blur-2xl p-2 rounded-2xl flex flex-col gap-1 border border-white/[0.06] shadow-[0_8px_40px_rgba(0,0,0,0.5)]"
+                                    >
+                                        <div className="px-3 py-2 flex items-center gap-2">
+                                            <Brain size={12} className="text-rose-400" />
+                                            <span className="text-[9px] font-black text-rose-400/80 uppercase tracking-[0.15em]">Synth Mode</span>
+                                        </div>
+                                        {[
+                                            { id: 'price', label: 'Market Value' },
+                                            { id: 'infra', label: 'Infrastructure' },
+                                            { id: 'mobility', label: 'Mobility Index' },
+                                            { id: 'demand', label: 'Growth Vector' },
+                                        ].map((mode) => (
+                                            <button
+                                                key={mode.id}
+                                                onClick={() => setSynthMode(mode.id as any)}
+                                                className={cn(
+                                                    "px-3 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest text-left transition-all",
+                                                    synthMode === mode.id
+                                                        ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                                                        : "text-slate-600 hover:text-slate-400 hover:bg-white/[0.02]"
+                                                )}
+                                            >
+                                                {mode.label}
+                                            </button>
+                                        ))}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -648,6 +824,109 @@ export default function MapPage() {
 
                 {/* Intel Tooltip */}
                 <IntelTooltip info={hoverInfo} />
+
+                {/* AI Click Prediction HUD */}
+                <AnimatePresence>
+                    {clickPred && cinematicEntry && (
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="absolute bottom-24 left-1/2 -translate-x-1/2 z-30"
+                        >
+                            <div className="bg-[#0a0e1a]/90 backdrop-blur-2xl p-4 rounded-3xl border border-white/[0.08] shadow-[0_20px_60px_rgba(0,0,0,0.6)] w-[360px] relative overflow-hidden">
+                                {/* Close Button */}
+                                <button
+                                    onClick={() => setClickPred(null)}
+                                    className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors"
+                                >
+                                    <EyeOff size={14} />
+                                </button>
+
+                                {clickPred.error ? (
+                                    <div className="flex flex-col items-center justify-center p-4 text-center">
+                                        <ShieldCheck size={24} className="text-rose-500 mb-2" />
+                                        <p className="text-xs font-bold text-rose-400 uppercase tracking-widest">{clickPred.error}</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <div className="w-8 h-8 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
+                                                <Brain size={14} className="text-cyan-400" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Real-Time AI Valuation</p>
+                                                <p className="text-xs font-bold text-white tracking-tight">
+                                                    {clickPred.lat.toFixed(4)}, {clickPred.lng.toFixed(4)}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/[0.04]">
+                                                    <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Ward</p>
+                                                    <p className="text-sm font-bold text-slate-300">{clickPred.ward}</p>
+                                                </div>
+                                                <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/[0.04]">
+                                                    <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Zone Type</p>
+                                                    <p className={cn(
+                                                        "text-sm font-bold",
+                                                        clickPred.zone === 'CBD' ? 'text-amber-400' :
+                                                            clickPred.zone === 'Premium' ? 'text-cyan-400' :
+                                                                'text-emerald-400'
+                                                    )}>{clickPred.zone}</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-end justify-between border-t border-white/[0.06] pt-4">
+                                                <div>
+                                                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Predicted Value</p>
+                                                    <h3 className="text-2xl font-black text-white tracking-tighter">
+                                                        ₹{clickPred.price_sqft.toLocaleString('en-IN')} <span className="text-xs text-slate-500">/sqft</span>
+                                                    </h3>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Valuation</p>
+                                                    <div className="flex items-center gap-2 justify-end">
+                                                        <input
+                                                            type="number"
+                                                            value={clickArea}
+                                                            onChange={(e) => setClickArea(e.target.value)}
+                                                            className="w-16 bg-white/[0.05] border border-white/[0.1] rounded text-[10px] font-bold text-white px-2 py-1 text-center focus:outline-none focus:border-cyan-500/50 transition-colors"
+                                                            placeholder="Sqft"
+                                                        />
+                                                        <span className="text-xs text-slate-600">sqft</span>
+                                                    </div>
+                                                    <p className="text-lg font-bold text-emerald-400 mt-1">
+                                                        {formatCurrencyCompact(clickPred.price_sqft * (Number(clickArea) || 0))}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* AI Click Loading State */}
+                <AnimatePresence>
+                    {clickLoading && cinematicEntry && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute bottom-24 left-1/2 -translate-x-1/2 z-30"
+                        >
+                            <div className="bg-[#0a0e1a]/90 backdrop-blur-2xl px-6 py-4 rounded-2xl border border-white/[0.08] flex items-center gap-3">
+                                <Scan size={16} className="text-cyan-500 animate-[spin_3s_linear_infinite]" />
+                                <span className="text-[10px] font-black text-cyan-500 uppercase tracking-[0.2em] animate-pulse">Running Geometrics...</span>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* Error State */}
                 {mapError && (

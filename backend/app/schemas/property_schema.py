@@ -12,6 +12,8 @@ class PropertyBase(BaseModel):
 class PropertyCreate(PropertyBase):
     latitude: float
     longitude: float
+    predicted_price: Optional[float] = None
+    is_verified: bool = False
 
 class PropertyUpdate(BaseModel):
     title: Optional[str] = None
@@ -30,8 +32,12 @@ class PropertyResponse(PropertyBase):
     location: Dict
     blockchain_hash: Optional[str] = None
     status: str
-    created_at: datetime
-    updated_at: datetime
+    is_nft: bool = False
+    nft_token_id: Optional[int] = None
+    predicted_price: Optional[float] = None
+    is_verified: bool = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     
     # We can also expose lat/long as computed fields if needed, 
     # but returning raw location is fine for now.

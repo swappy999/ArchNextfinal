@@ -19,11 +19,16 @@ async def get_portfolio(current_user: dict) -> dict:
     - total_predicted_value  
     - portfolio_growth_percent
     """
-    user_id = str(current_user["_id"])
+    user_id = str(current_user.get("_id", current_user.get("id")))
+    wallet = (current_user.get("wallet_address") or "").lower()
 
-    # 1. Fetch all user-owned properties
+    # 1. Fetch all user-owned properties (check by ID or Wallet)
     all_props = await get_all_properties()
-    owned = [p for p in all_props if str(p.get("owner_id")) == user_id]
+    owned = []
+    for p in all_props:
+        p_owner = str(p.get("owner_id", "")).lower()
+        if p_owner == user_id.lower() or (wallet and p_owner == wallet):
+            owned.append(p)
 
     if not owned:
         return {
@@ -89,10 +94,16 @@ async def get_portfolio(current_user: dict) -> dict:
             "marketplace": listing_status,
             # Hash/verification
             "blockchain_verified": prop.get("blockchain_verified", False),
-            "property_hash": prop.get("property_hash")
+            "property_hash": prop.get("property_hash"),
+            "status": prop.get("status", "draft")
         })
 
-    # 5. Portfolio aggregates
+    # 5. Active auctions and bids for this user
+    from app.repository.auction_repo import get_auctions_by_user, get_bids_by_user
+    active_auctions = await get_auctions_by_user(user_id, wallet=wallet)
+    my_bids = await get_bids_by_user(user_id, wallet=wallet)
+
+    # 6. Portfolio aggregates
     growth_pct = 0
     if total_current > 0:
         growth_pct = round(((total_predicted - total_current) / total_current) * 100, 2)
@@ -103,5 +114,7 @@ async def get_portfolio(current_user: dict) -> dict:
         "total_current_value": round(total_current, 2),
         "total_predicted_value": round(total_predicted, 2),
         "portfolio_growth_percent": growth_pct,
-        "properties": portfolio_items
+        "properties": portfolio_items,
+        "active_auctions": active_auctions,
+        "my_bids": my_bids
     }

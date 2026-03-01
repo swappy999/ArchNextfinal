@@ -31,6 +31,7 @@ interface MapState {
     bounds: MapBounds | null
 
     // ─── Data ─────────────────────────────────────────
+    mlGeoJson: any | null
     clusters: any[]
     heatmap: any[]
     zones: any[]
@@ -44,6 +45,7 @@ interface MapState {
     selectedFeature: any | null
     hoverInfo: HoverInfo | null
     viewMode: '2d' | '3d'
+    synthMode: 'price' | 'infra' | 'mobility' | 'demand'
     cinematicEntry: boolean
 
     // ─── Actions ──────────────────────────────────────
@@ -53,6 +55,7 @@ interface MapState {
     setSelectedFeature: (feature: any | null) => void
     setHoverInfo: (info: HoverInfo | null) => void
     setViewMode: (mode: '2d' | '3d') => void
+    setSynthMode: (mode: 'price' | 'infra' | 'mobility' | 'demand') => void
     setCinematicEntry: (done: boolean) => void
     fetchMapData: (bounds: MapBounds) => Promise<void>
     flyTo: (target: Partial<Viewport>, duration?: number) => void
@@ -76,6 +79,7 @@ export const useMapStore = create<MapState>((set, get) => ({
     bounds: null,
 
     // Data
+    mlGeoJson: null,
     clusters: [],
     heatmap: [],
     zones: [],
@@ -91,10 +95,12 @@ export const useMapStore = create<MapState>((set, get) => ({
         properties: true,
         pulse: true,
         buildings: true,
+        synth: true,
     },
     selectedFeature: null,
     hoverInfo: null,
     viewMode: '3d',
+    synthMode: 'price',
     cinematicEntry: false,
 
     // ─── Actions ──────────────────────────────────────
@@ -104,11 +110,11 @@ export const useMapStore = create<MapState>((set, get) => ({
 
     setBounds: (bounds) => {
         set({ bounds })
-        // Debounced fetch — 300ms
+        // Debounced fetch — 1000ms to ensure user has stopped panning
         if (fetchTimer) clearTimeout(fetchTimer)
         fetchTimer = setTimeout(() => {
             get().fetchMapData(bounds)
-        }, 300)
+        }, 1000)
     },
 
     toggleLayer: (layerId) =>
@@ -122,22 +128,37 @@ export const useMapStore = create<MapState>((set, get) => ({
     setSelectedFeature: (feature) => set({ selectedFeature: feature }),
     setHoverInfo: (info) => set({ hoverInfo: info }),
     setViewMode: (mode) => set({ viewMode: mode }),
+    setSynthMode: (mode) => set({ synthMode: mode }),
     setCinematicEntry: (done) => set({ cinematicEntry: done }),
 
     fetchMapData: async (bounds) => {
         set({ loading: true })
         try {
             const { ne_lng, ne_lat, sw_lng, sw_lat } = bounds
-            const data = await api.get(
+            const zoom = get().viewport.zoom;
+
+            // 1. Fetch Structural Data (Extrusions, Boundaries, Clusters)
+            const smartDataPromise = api.get(
                 `/map/smart-map?ne_lng=${ne_lng}&ne_lat=${ne_lat}&sw_lng=${sw_lng}&sw_lat=${sw_lat}`
             )
+
+            // 2. Fetch Live Machine Learning Geo-predictions
+            const aiDataPromise = api.post('/prediction/map-predict', {
+                bbox: [sw_lng, sw_lat, ne_lng, ne_lat],
+                zoom: zoom
+            })
+
+            // Await both spatial systems concurrently
+            const [smartData, aiData] = await Promise.all([smartDataPromise, aiDataPromise])
+
             set({
-                clusters: data.clusters || [],
-                heatmap: data.heatmap || [],
-                zones: data.zones || [],
-                pulsePoints: data.pulse_points || [],
-                currentZone: data.zone || null,
-                propertyCount: data.property_count || 0,
+                mlGeoJson: aiData,
+                clusters: smartData?.clusters || [],
+                heatmap: smartData?.heatmap || [],
+                zones: smartData?.zones || [],
+                pulsePoints: smartData?.pulse_points || [],
+                currentZone: smartData?.zone || null,
+                propertyCount: aiData?.features?.length || 0,
                 loading: false,
             })
         } catch {

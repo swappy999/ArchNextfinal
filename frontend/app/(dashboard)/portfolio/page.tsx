@@ -1,16 +1,378 @@
 'use client'
 
-import { useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
     Briefcase, TrendingUp, Building2,
     ArrowUpRight, ArrowDownRight, PieChart,
-    History, Wallet, Target, Activity, Zap
+    History, Wallet, Target, Activity, Zap,
+    X, Gavel, Tag, Shield, Brain, CheckCircle2,
+    AlertTriangle, XCircle, Loader2, Timer, Plus
 } from 'lucide-react'
 import { usePortfolioStore } from '@/store/portfolioStore'
+import { useMarketplaceStore } from '@/store/marketplaceStore'
+import { useAuctionStore } from '@/store/auctionStore'
 import { formatCurrency, cn } from '@/lib/utils'
+import Link from 'next/link'
+import { api } from '@/lib/api'
+import { useAuthStore } from '@/store/authStore'
+import { toast } from 'react-hot-toast'
 
-function AssetCard({ asset, index }: { asset: any, index: number }) {
+// ─── Verification Status Icon ────────────────────────────────────────────────
+function StatusIcon({ status }: { status: string }) {
+    switch (status) {
+        case 'PASS':
+            return <CheckCircle2 size={14} className="text-emerald-400" />
+        case 'WARN':
+            return <AlertTriangle size={14} className="text-amber-400" />
+        case 'FAIL':
+            return <XCircle size={14} className="text-rose-400" />
+        default:
+            return <Shield size={14} className="text-slate-500" />
+    }
+}
+
+function statusColor(status: string) {
+    switch (status) {
+        case 'PASS': return 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5'
+        case 'WARN': return 'text-amber-400 border-amber-500/20 bg-amber-500/5'
+        case 'FAIL': return 'text-rose-400 border-rose-500/20 bg-rose-500/5'
+        default: return 'text-slate-400 border-white/10 bg-white/5'
+    }
+}
+
+// ─── Listing Modal ───────────────────────────────────────────────────────────
+function ListingModal({ asset, onClose }: { asset: any, onClose: () => void }) {
+    const [step, setStep] = useState<'verify' | 'choose' | 'price'>('verify')
+    const [verifying, setVerifying] = useState(true)
+    const [report, setReport] = useState<any>(null)
+    const [listingType, setListingType] = useState<'fixed' | 'auction'>('fixed')
+    const [askingPrice, setAskingPrice] = useState('')
+    const [durationHours, setDurationHours] = useState(24)
+    const [submitting, setSubmitting] = useState(false)
+    const createAuction = useAuctionStore(s => s.createAuction)
+
+    // Run verification on mount
+    useEffect(() => {
+        runVerification()
+    }, [])
+
+    useEffect(() => {
+        if (report?.ai_valuation?.total_estimated_value) {
+            setAskingPrice(report.ai_valuation.total_estimated_value.toString())
+        }
+    }, [report])
+
+    const runVerification = async () => {
+        setVerifying(true)
+        try {
+            const token = useAuthStore.getState().accessToken
+            const data = await api.post(`/verify/${asset.id || asset.property_id}`, {
+                asking_price: asset.current_value || asset.price || 0
+            }, token)
+            setReport(data)
+        } catch (e: any) {
+            setReport({
+                overall_status: 'WARN',
+                overall_label: 'Verification service unavailable. Proceed with caution.',
+                can_list: true,
+                checks: {},
+                ai_valuation: null,
+            })
+        }
+        setVerifying(false)
+    }
+
+    const handleSubmitListing = async () => {
+        const price = parseFloat(askingPrice)
+        if (isNaN(price) || price <= 0) {
+            toast.error('Enter a valid price')
+            return
+        }
+
+        setSubmitting(true)
+        try {
+            if (listingType === 'auction') {
+                await createAuction(asset.id || asset.property_id, price, durationHours)
+                toast.success(`Auction started! Ends in ${durationHours}h.`)
+            } else {
+                // Fixed price listing via marketplace
+                const { prepareListProperty } = useMarketplaceStore.getState()
+                if (asset.is_nft) {
+                    const res = await prepareListProperty(asset.id, price)
+                    // For on-chain NFTs, MetaMask flow
+                    const { getEthersSigner } = await import('@/store/walletStore')
+                    const { ethers } = await import('ethers')
+                    const signer = await getEthersSigner()
+
+                    const marketplaceArtifact = await import('@/contracts/PropertyMarketplace.json')
+                    const nftArtifact = await import('@/contracts/PropertyNFT.json')
+
+                    const marketplace = new ethers.Contract(res.marketplace_contract_address, marketplaceArtifact.abi, signer)
+                    const nft = new ethers.Contract(res.nft_contract_address, nftArtifact.abi, signer)
+
+                    toast('Approve NFT transfer in MetaMask...', { icon: '🦊' })
+                    const approveTx = await nft.approve(res.marketplace_contract_address, res.nft_token_id)
+                    await approveTx.wait()
+
+                    toast('Confirm listing in MetaMask...', { icon: '🦊' })
+                    const listTx = await marketplace.listProperty(
+                        res.nft_contract_address,
+                        res.nft_token_id,
+                        res.price_wei.toString()
+                    )
+                    await listTx.wait()
+                    toast.success('Listed on-chain successfully!')
+                } else {
+                    toast.success('Property listed on marketplace!')
+                }
+            }
+            onClose()
+        } catch (e: any) {
+            console.error(e)
+            toast.error(e.message || 'Failed to list property')
+        }
+        setSubmitting(false)
+    }
+
+    const checks = report?.checks || {}
+    const aiVal = report?.ai_valuation
+
+    return (
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+            onClick={onClose}
+        >
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="w-full max-w-[600px] max-h-[90vh] overflow-y-auto bg-[#0B0F1A] border border-white/[0.08] rounded-3xl shadow-2xl"
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Header */}
+                <div className="flex items-center justify-between p-6 border-b border-white/[0.06]">
+                    <div className="flex items-center gap-3">
+                        <Shield size={18} className="text-cyan-400" />
+                        <div>
+                            <h2 className="text-lg font-black text-white tracking-tight">AI Verification & Listing</h2>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{asset.title}</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/5 text-slate-500 hover:text-white transition-colors">
+                        <X size={18} />
+                    </button>
+                </div>
+
+                <div className="p-6 space-y-6">
+                    {/* Step 1: Verification */}
+                    {verifying ? (
+                        <div className="flex flex-col items-center py-12 gap-4">
+                            <div className="relative">
+                                <Loader2 size={32} className="text-cyan-400 animate-spin" />
+                                <div className="absolute inset-0 bg-cyan-500/20 blur-2xl rounded-full" />
+                            </div>
+                            <p className="text-sm font-black text-white uppercase tracking-widest">Running AI Verification</p>
+                            <p className="text-xs text-slate-500">Analyzing location, price, and market data...</p>
+                        </div>
+                    ) : (
+                        <>
+                            {/* Overall Status */}
+                            <div className={cn(
+                                "p-4 rounded-2xl border flex items-center gap-4",
+                                statusColor(report?.overall_status)
+                            )}>
+                                <StatusIcon status={report?.overall_status} />
+                                <div>
+                                    <p className="text-sm font-black uppercase tracking-widest">
+                                        {report?.overall_status === 'PASS' ? 'Verified' :
+                                            report?.overall_status === 'WARN' ? 'Passed with Warnings' : 'Verification Failed'}
+                                    </p>
+                                    <p className="text-[10px] font-bold mt-0.5 opacity-80">{report?.overall_label}</p>
+                                </div>
+                            </div>
+
+                            {/* Individual Checks */}
+                            <div className="space-y-2">
+                                <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-3">Verification Checks</p>
+                                {Object.entries(checks).map(([key, check]: [string, any]) => (
+                                    <div key={key} className={cn(
+                                        "flex items-center justify-between p-3 rounded-xl border",
+                                        statusColor(check.status)
+                                    )}>
+                                        <div className="flex items-center gap-3">
+                                            <StatusIcon status={check.status} />
+                                            <span className="text-xs font-bold capitalize">{key.replace('_', ' ')}</span>
+                                        </div>
+                                        <span className="text-[10px] font-bold opacity-70 max-w-[200px] text-right">{check.label}</span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* AI Valuation Panel */}
+                            {aiVal && (
+                                <div className="glass-panel p-5 rounded-2xl border border-cyan-500/10 space-y-4">
+                                    <div className="flex items-center gap-2">
+                                        <Brain size={14} className="text-cyan-400" />
+                                        <span className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em]">AI Valuation</span>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div className="text-center p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                                            <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Per Sq.Ft</p>
+                                            <p className="text-lg font-black text-white">₹{aiVal.predicted_price_per_sqft?.toLocaleString('en-IN')}</p>
+                                        </div>
+                                        <div className="text-center p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                                            <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Total Est.</p>
+                                            <p className="text-lg font-black text-emerald-400">₹{(aiVal.total_estimated_value / 10000000)?.toFixed(2)} Cr</p>
+                                        </div>
+                                        <div className="text-center p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                                            <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Confidence</p>
+                                            <p className="text-lg font-black text-cyan-400">{aiVal.confidence}%</p>
+                                        </div>
+                                    </div>
+                                    {/* Score bars */}
+                                    <div className="grid grid-cols-3 gap-3">
+                                        {[
+                                            { label: 'Infra', value: aiVal.infra_score, color: 'bg-cyan-500' },
+                                            { label: 'Access', value: aiVal.access_score, color: 'bg-emerald-500' },
+                                            { label: 'Demand', value: aiVal.demand_score, color: 'bg-amber-500' },
+                                        ].map(({ label, value, color }) => (
+                                            <div key={label} className="space-y-1">
+                                                <div className="flex justify-between text-[8px] font-bold text-slate-500">
+                                                    <span>{label}</span>
+                                                    <span>{value}%</span>
+                                                </div>
+                                                <div className="h-1 bg-white/[0.04] rounded-full overflow-hidden">
+                                                    <motion.div
+                                                        initial={{ width: 0 }}
+                                                        animate={{ width: `${value}%` }}
+                                                        transition={{ duration: 1, delay: 0.5 }}
+                                                        className={cn("h-full rounded-full", color)}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Listing Options (only if can_list) */}
+                            {report?.can_list && (
+                                <>
+                                    {/* Listing Type Selector */}
+                                    <div className="space-y-3">
+                                        <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Listing Type</p>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button
+                                                onClick={() => setListingType('fixed')}
+                                                className={cn(
+                                                    "p-4 rounded-xl border text-left transition-all",
+                                                    listingType === 'fixed'
+                                                        ? 'border-cyan-500/30 bg-cyan-500/5'
+                                                        : 'border-white/[0.06] hover:border-white/10'
+                                                )}
+                                            >
+                                                <Tag size={16} className={listingType === 'fixed' ? 'text-cyan-400' : 'text-slate-600'} />
+                                                <p className={cn("text-sm font-black mt-2", listingType === 'fixed' ? 'text-white' : 'text-slate-500')}>Fixed Price</p>
+                                                <p className="text-[9px] font-bold text-slate-600 mt-1">Set a price, buyers purchase directly</p>
+                                            </button>
+                                            <button
+                                                onClick={() => setListingType('auction')}
+                                                className={cn(
+                                                    "p-4 rounded-xl border text-left transition-all",
+                                                    listingType === 'auction'
+                                                        ? 'border-cyan-500/30 bg-cyan-500/5'
+                                                        : 'border-white/[0.06] hover:border-white/10'
+                                                )}
+                                            >
+                                                <Gavel size={16} className={listingType === 'auction' ? 'text-cyan-400' : 'text-slate-600'} />
+                                                <p className={cn("text-sm font-black mt-2", listingType === 'auction' ? 'text-white' : 'text-slate-500')}>Start Auction</p>
+                                                <p className="text-[9px] font-bold text-slate-600 mt-1">Set reserve price, accept bids</p>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Price input */}
+                                    <div className="space-y-2">
+                                        <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest">
+                                            {listingType === 'auction' ? 'Reserve Price (₹)' : 'Asking Price (₹)'}
+                                        </p>
+                                        <div className="relative group/input">
+                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-slate-600">₹</span>
+                                            <input
+                                                type="number"
+                                                value={askingPrice}
+                                                onChange={(e) => setAskingPrice(e.target.value)}
+                                                placeholder={aiVal ? (aiVal.total_estimated_value || 0).toString() : '0'}
+                                                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl pl-8 pr-4 py-3.5 text-lg font-black text-white placeholder:text-slate-700 focus:outline-none focus:border-cyan-500/50 transition-colors"
+                                            />
+                                            {aiVal && askingPrice === aiVal.total_estimated_value.toString() && (
+                                                <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+                                                    <Brain size={14} className="text-cyan-400 animate-pulse" />
+                                                    <span className="text-[9px] font-black text-cyan-400/80 uppercase tracking-widest bg-cyan-500/10 px-2 py-1 rounded-md border border-cyan-500/20">
+                                                        AI Optimized
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Duration (auction only) */}
+                                    {listingType === 'auction' && (
+                                        <div className="space-y-2">
+                                            <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Auction Duration</p>
+                                            <div className="grid grid-cols-4 gap-2">
+                                                {[6, 12, 24, 48].map(h => (
+                                                    <button
+                                                        key={h}
+                                                        onClick={() => setDurationHours(h)}
+                                                        className={cn(
+                                                            "py-2.5 rounded-xl text-xs font-black border transition-all",
+                                                            durationHours === h
+                                                                ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400'
+                                                                : 'border-white/[0.06] text-slate-500 hover:text-white'
+                                                        )}
+                                                    >
+                                                        {h}h
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Submit */}
+                                    <button
+                                        onClick={handleSubmitListing}
+                                        disabled={submitting}
+                                        className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-700 text-sm font-black text-white uppercase tracking-[0.2em] shadow-2xl hover:-translate-y-0.5 transition-all disabled:opacity-50"
+                                    >
+                                        {submitting ? <Loader2 size={16} className="animate-spin" /> : (listingType === 'auction' ? <Gavel size={16} /> : <Tag size={16} />)}
+                                        {submitting ? 'Processing...' : listingType === 'auction' ? 'Start Auction' : 'List for Sale'}
+                                    </button>
+                                </>
+                            )}
+
+                            {/* Cannot list */}
+                            {!report?.can_list && (
+                                <div className="p-4 rounded-2xl border border-rose-500/20 bg-rose-500/5 text-center">
+                                    <XCircle size={24} className="text-rose-400 mx-auto mb-2" />
+                                    <p className="text-sm font-black text-rose-400">Listing Blocked</p>
+                                    <p className="text-xs text-slate-500 mt-1">Property failed verification. Please resolve the issues above.</p>
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+            </motion.div>
+        </motion.div>
+    )
+}
+
+// ─── Asset Card ──────────────────────────────────────────────────────────────
+function AssetCard({ asset, index, onListClick }: { asset: any, index: number, onListClick: () => void }) {
     const gain = asset.current_value - asset.purchase_price
     const gainPct = ((gain / asset.purchase_price) * 100).toFixed(1)
     const isPositive = gain >= 0
@@ -29,9 +391,14 @@ function AssetCard({ asset, index }: { asset: any, index: number }) {
                     <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent" />
                     <Building2 size={24} className="text-slate-500 group-hover:text-cyan-400 transition-colors relative z-10" />
                 </div>
-                {asset.is_nft && (
-                    <span className="text-[9px] font-black px-2.5 py-1 rounded-lg border border-cyan-500/20 bg-cyan-500/10 text-cyan-400 uppercase tracking-widest shadow-lg">NFT ASSET</span>
-                )}
+                <div className="flex flex-col items-end gap-2">
+                    {asset.is_nft && (
+                        <span className="text-[9px] font-black px-2.5 py-1 rounded-lg border border-cyan-500/20 bg-cyan-500/10 text-cyan-400 uppercase tracking-widest shadow-lg">NFT ASSET</span>
+                    )}
+                    {asset.status === 'available' && (
+                        <span className="text-[9px] font-black px-2.5 py-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 uppercase tracking-widest shadow-lg animate-pulse">LISTED</span>
+                    )}
+                </div>
             </div>
 
             <div className="space-y-1.5 mb-8">
@@ -51,14 +418,24 @@ function AssetCard({ asset, index }: { asset: any, index: number }) {
                         {formatCurrency(asset.current_value || 0)}
                     </p>
                 </div>
-                <div className={cn(
-                    "flex flex-col items-end gap-1.5 px-4 py-2 rounded-2xl border transition-all duration-500",
-                    isPositive ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400' : 'bg-rose-500/5 border-rose-500/10 text-rose-400'
-                )}>
-                    <div className="flex items-center gap-1 text-[11px] font-black tracking-widest uppercase">
+
+                <div className="flex flex-col items-end gap-3">
+                    <div className={cn(
+                        "flex items-center gap-1 px-4 py-2 rounded-2xl border transition-all duration-500 text-[11px] font-black tracking-widest uppercase",
+                        isPositive ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400' : 'bg-rose-500/5 border-rose-500/10 text-rose-400'
+                    )}>
                         {isPositive ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
                         {gainPct}%
                     </div>
+
+                    {/* List for Sale / Start Auction Button */}
+                    <button
+                        onClick={onListClick}
+                        className="bg-white text-black hover:bg-cyan-400 hover:text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-xl active:scale-95 flex items-center gap-2"
+                    >
+                        <Gavel size={12} />
+                        List / Auction
+                    </button>
                 </div>
             </div>
 
@@ -76,7 +453,8 @@ function AssetCard({ asset, index }: { asset: any, index: number }) {
 }
 
 export default function PortfolioPage() {
-    const { assets, total_current_value, total_invested, fetchPortfolio, loading } = usePortfolioStore()
+    const { assets, active_auctions, my_bids, total_current_value, total_invested, fetchPortfolio, loading } = usePortfolioStore()
+    const [selectedAsset, setSelectedAsset] = useState<any>(null)
 
     useEffect(() => { fetchPortfolio() }, [])
 
@@ -106,6 +484,13 @@ export default function PortfolioPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
+                    <Link
+                        href="/properties/create"
+                        className="glass-panel px-6 py-3.5 rounded-2xl flex items-center gap-4 border-cyan-500/20 bg-cyan-500/5 text-cyan-400 hover:bg-cyan-500/10 transition-all shadow-2xl active:scale-95"
+                    >
+                        <Plus size={16} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Add New Asset</span>
+                    </Link>
                     <div className="glass-panel px-6 py-3.5 rounded-2xl flex items-center gap-4 border-white/[0.04] shadow-2xl">
                         <History size={16} className="text-slate-500" />
                         <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Last Update: Just Now</span>
@@ -145,7 +530,6 @@ export default function PortfolioPage() {
                             )}
                         </div>
 
-                        {/* Interactive Growth Line (Decorative) */}
                         <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent scale-x-0 group-hover:scale-x-100 transition-transform duration-700" />
                     </motion.div>
                 ))}
@@ -184,24 +568,113 @@ export default function PortfolioPage() {
                     <motion.div
                         initial={{ opacity: 0, scale: 0.98 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="flex flex-col items-center justify-center py-40 glass-panel rounded-[3rem] border-dashed border-white/[0.06] bg-[#05070A]/50"
+                        className="flex flex-col items-center justify-center py-20 glass-panel rounded-[3rem] border-dashed border-white/[0.06] bg-[#05070A]/50"
                     >
-                        <div className="w-24 h-24 rounded-[2rem] bg-white/[0.02] border border-white/[0.05] flex items-center justify-center mb-8 relative">
-                            <Briefcase size={40} className="text-slate-800" />
-                            <div className="absolute inset-[-8px] border border-cyan-500/10 rounded-[2.5rem] animate-pulse" />
+                        <div className="w-16 h-16 rounded-2xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-center mb-6 relative">
+                            <Briefcase size={24} className="text-slate-800" />
                         </div>
-                        <h2 className="text-2xl font-black text-slate-300 tracking-tight">Zero Network Holdings</h2>
-                        <p className="text-slate-500 mt-2 max-w-xs text-center font-medium">Initialize your capital deployment via the marketplace to begin tracking assets.</p>
-                        <button className="mt-10 px-10 py-4 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-700 text-[10px] font-black text-white uppercase tracking-[0.3em] shadow-2xl hover:-translate-y-1 transition-all">
-                            Explore Marketplace
-                        </button>
+                        <h2 className="text-lg font-black text-slate-300 tracking-tight">Zero Network Holdings</h2>
+                        <p className="text-slate-500 mt-1 max-w-xs text-center font-medium text-xs">Initialize your capital deployment via the marketplace.</p>
                     </motion.div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                        {assets.map((asset: any, i: number) => <AssetCard key={asset.id || i} asset={asset} index={i} />)}
+                        {assets.map((asset: any, i: number) => (
+                            <AssetCard
+                                key={asset.id || i}
+                                asset={asset}
+                                index={i}
+                                onListClick={() => setSelectedAsset(asset)}
+                            />
+                        ))}
                     </div>
                 )}
             </div>
+
+            {/* My Active Auctions */}
+            <div className="space-y-8">
+                <div className="flex items-center gap-4 px-2">
+                    <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
+                        <Gavel size={20} className="text-cyan-400" />
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-black text-white tracking-tight">Active Auctions</h2>
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-0.5">Properties you are currently auctioning</p>
+                    </div>
+                </div>
+
+                {active_auctions.length === 0 ? (
+                    <div className="py-12 text-center glass-panel rounded-3xl border border-white/[0.04] text-slate-600 text-[10px] font-black uppercase tracking-widest">
+                        No active auctions.
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        {active_auctions.map((auction: any, i: number) => (
+                            <Link href={`/properties/${auction.property_id}`} key={auction.id}>
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{ delay: i * 0.1 }}
+                                    className="glass-card p-6 rounded-3xl border border-cyan-500/20 bg-cyan-500/5 relative overflow-hidden group hover:border-cyan-500/50 transition-all cursor-pointer"
+                                >
+                                    <div className="absolute top-4 right-4 text-[8px] font-black bg-cyan-500 text-black px-2 py-0.5 rounded-full animate-pulse">LIVE</div>
+                                    <h3 className="text-white font-black truncate pr-10 mb-2">Auction #{auction.id.slice(-6).toUpperCase()}</h3>
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-[9px] font-black text-slate-500 uppercase">Current Bid</span>
+                                            <span className="text-lg font-black text-cyan-400">₹{auction.current_bid?.toLocaleString('en-IN') || 0}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center px-3 py-2 bg-white/[0.03] rounded-xl">
+                                            <Timer size={12} className="text-cyan-500" />
+                                            <span className="text-[10px] font-bold text-slate-300">Ends {new Date(auction.end_time).toLocaleDateString()}</span>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            </Link>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* My Placed Bids */}
+            <div className="space-y-8">
+                <div className="flex items-center gap-4 px-2">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                        <Target size={20} className="text-emerald-400" />
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-black text-white tracking-tight">Neural Bids</h2>
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-0.5">Your active bids across the network</p>
+                    </div>
+                </div>
+
+                {my_bids.length === 0 ? (
+                    <div className="py-12 text-center glass-panel rounded-3xl border border-white/[0.04] text-slate-600 text-[10px] font-black uppercase tracking-widest">
+                        No active network bids.
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {my_bids.map((bid: any, i: number) => (
+                            <Link href={`/properties/${bid.property_id}`} key={bid.id}>
+                                <motion.div
+                                    initial={{ opacity: 0, x: -10 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    className="glass-card p-4 rounded-2xl border border-white/[0.06] flex items-center justify-between group hover:border-emerald-500/30 transition-all cursor-pointer"
+                                >
+                                    <div>
+                                        <p className="text-[8px] font-black text-slate-500 uppercase mb-1">Auction Ref</p>
+                                        <p className="text-xs font-black text-white">#{bid.auction_id.slice(-6).toUpperCase()}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[8px] font-black text-emerald-500 uppercase mb-1">Bid Amount</p>
+                                        <p className="text-sm font-black text-emerald-400">₹{bid.amount.toLocaleString('en-IN')}</p>
+                                    </div>
+                                </motion.div>
+                            </Link>
+                        ))}
+                    </div>
+                )}
+            </div>
+
 
             {/* Bottom Insight Card */}
             <div className="glass-panel p-10 rounded-[3rem] border-white/[0.06] relative overflow-hidden group">
@@ -242,7 +715,16 @@ export default function PortfolioPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Listing Modal */}
+            <AnimatePresence>
+                {selectedAsset && (
+                    <ListingModal
+                        asset={selectedAsset}
+                        onClose={() => setSelectedAsset(null)}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     )
 }
-

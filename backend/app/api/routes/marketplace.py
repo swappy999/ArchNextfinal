@@ -6,7 +6,9 @@ from app.services.marketplace_service import (
     get_property_listing_service,
     list_property_service
 )
-from app.repository.property_repo import get_property_by_id, update_property
+from app.services.property_state.property_state_controller import update_property_state
+from app.services.property_state.property_state_machine import PropertyEvent
+from app.repository.property_repo import get_property_by_id
 from fastapi import HTTPException
 
 router = APIRouter(prefix="/marketplace", tags=["Marketplace"])
@@ -15,7 +17,8 @@ class ListingRequest(BaseModel):
     price_matic: float  # Price in MATIC
 
 class BuyRequest(BaseModel):
-    price: float  # Price in fiat/display currency
+    price: float
+    tx_hash: str | None = None
 
 @router.get("/listings")
 async def get_all_listings():
@@ -65,21 +68,34 @@ async def buy_listing(
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
         
-    if prop.get("status") != "available":
-        raise HTTPException(status_code=400, detail="Property is no longer available")
+    if prop.get("status") not in ["listed", "available"]:
+        raise HTTPException(status_code=400, detail="Property is no longer available for direct sale")
 
-    wallet = current_user.get("wallet_address")
-    if not wallet:
-        wallet = current_user.get("email") # Fallback to email if no wallet connected
-        
-    user_id_or_wallet = str(current_user.get("id", current_user.get("_id", wallet)))
+    wallet = current_user.get("wallet_address", current_user.get("email"))
+    # Strictly use the internal DB ID (_id) for portfolio tracking
+    user_id = str(current_user.get("_id"))
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User identification lost")
 
     # 2. Determine if it's considered "On-Chain"
-    # To match the frontend simulation, we look for token_id presence
     has_token = prop.get("nft_token_id") is not None
     
     if has_token:
-        # On-chain flow
+        if body.tx_hash:
+            await update_property_state(
+                PropertyEvent.PROPERTY_SOLD,
+                listing_id,
+                payload={"buyer_id": user_id, "tx_hash": body.tx_hash}
+            )
+            return {
+                "listing_id": listing_id,
+                "buyer": user_id,
+                "status": "completed",
+                "tx_hash": body.tx_hash,
+                "message": "On-chain purchase recorded. View in your portfolio.",
+                "is_nft": True
+            }
+
         return {
             "listing_id": listing_id,
             "buyer_wallet": wallet,
@@ -91,17 +107,15 @@ async def buy_listing(
         }
     else:
         # Standard flow - immediately update DB
-        success = await update_property(listing_id, {
-            "owner_id": user_id_or_wallet,
-            "status": "sold"
-        })
-        
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to process transaction")
+        await update_property_state(
+            PropertyEvent.PROPERTY_SOLD,
+            listing_id,
+            payload={"buyer_id": user_id}
+        )
             
         return {
             "listing_id": listing_id,
-            "buyer": user_id_or_wallet,
+            "buyer": user_id,
             "price": body.price,
             "status": "completed",
             "message": "Asset acquired successfully. View in your portfolio.",

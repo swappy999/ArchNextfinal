@@ -23,6 +23,9 @@ contract PropertyNFT is ERC721, Ownable {
     // propertyHash => tokenId (for reverse lookup)
     mapping(string => uint256) public hashToToken;
 
+    // propertyHash => bool (to track if hash exists, since token 0 is a valid ID)
+    mapping(string => bool) public isHashMinted;
+
     event PropertyMinted(
         uint256 indexed tokenId,
         address indexed owner,
@@ -44,7 +47,7 @@ contract PropertyNFT is ERC721, Ownable {
         string memory propertyId
     ) public onlyOwner returns (uint256) {
         require(bytes(propertyHash).length > 0, "Hash required");
-        require(bytes(propertyHashes[hashToToken[propertyHash]]).length == 0, "Already minted");
+        require(!isHashMinted[propertyHash], "Already minted");
 
         uint256 tokenId = tokenCounter;
 
@@ -53,6 +56,7 @@ contract PropertyNFT is ERC721, Ownable {
         propertyHashes[tokenId] = propertyHash;
         propertyIds[tokenId] = propertyId;
         hashToToken[propertyHash] = tokenId;
+        isHashMinted[propertyHash] = true;
 
         tokenCounter++;
 
@@ -80,7 +84,6 @@ contract PropertyNFT is ERC721, Ownable {
      * @dev Checks if a property hash has been minted as an NFT.
      */
     function isMinted(string memory propertyHash) public view returns (bool) {
-        uint256 tokenId = hashToToken[propertyHash];
-        return bytes(propertyHashes[tokenId]).length > 0;
+        return isHashMinted[propertyHash];
     }
 }

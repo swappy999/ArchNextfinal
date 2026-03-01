@@ -11,8 +11,8 @@ import { api } from '@/lib/api'
 export default function ForgotPasswordPage() {
     const [email, setEmail] = useState('')
     const [loading, setLoading] = useState(false)
-    const [error, setError] = useState('')
     const [success, setSuccess] = useState(false)
+    const [error, setError] = useState('')
 
     const handleReset = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -22,7 +22,7 @@ export default function ForgotPasswordPage() {
             await api.post('/auth/forgot-password', { email })
             setSuccess(true)
         } catch (err: any) {
-            setError(err.message || 'Failed to send reset email.')
+            setError(err.message || 'Failed to send reset code.')
         } finally {
             setLoading(false)
         }

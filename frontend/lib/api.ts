@@ -1,4 +1,5 @@
-const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// Ensure BASE does not contain /api/v1 because main.py mounts routers directly at the root (e.g. /auth)
+const BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace('/api/v1', '')
 
 async function req(path: string, options: RequestInit = {}, token?: string | null) {
     const headers: Record<string, string> = {
@@ -7,7 +8,10 @@ async function req(path: string, options: RequestInit = {}, token?: string | nul
     }
     if (token) headers['Authorization'] = `Bearer ${token}`
 
-    let res = await fetch(`${BASE}${path}`, { ...options, headers })
+    // Ensure path starts with a slash
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`
+
+    let res = await fetch(`${BASE}${normalizedPath}`, { ...options, headers })
 
     // Handle 401 Unauthorized - Attempt Token Refresh
     if (res.status === 401 && !path.includes('/auth/')) {
@@ -32,10 +36,12 @@ async function req(path: string, options: RequestInit = {}, token?: string | nul
                         useAuthStore.setState({ accessToken: data.access_token })
                         // Retry the original request with new token
                         headers['Authorization'] = `Bearer ${data.access_token}`
-                        res = await fetch(`${BASE}${path}`, { ...options, headers })
+                        res = await fetch(`${BASE}${normalizedPath}`, { ...options, headers })
+                    } else {
+                        console.warn('[API] Refresh failed, session invalid: missing access_token')
                     }
                 } else {
-                    console.warn('[API] Refresh failed, session invalid')
+                    console.warn('[API] Refresh failed, session invalid:', refreshRes.status)
                 }
             }
         } catch (err) {
@@ -49,7 +55,11 @@ async function req(path: string, options: RequestInit = {}, token?: string | nul
 
         if (contentType && contentType.includes('application/json')) {
             const err = await res.json().catch(() => ({}))
-            detail = err.detail || err.message || ''
+            detail = err.detail || err.message || err.error || ''
+        } else {
+            // Read raw text if it's an HTML 404 or Gateway error
+            const rawText = await res.text().catch(() => '')
+            detail = `Network error: ${res.status} ${res.statusText}. ${rawText.substring(0, 100)}`
         }
 
         const errorMessage = detail || res.statusText || `Request failed with status ${res.status}`

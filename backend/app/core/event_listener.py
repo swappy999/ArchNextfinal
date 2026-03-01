@@ -25,11 +25,26 @@ async def _indexer_loop():
 @asynccontextmanager
 async def lifespan_with_indexer(app):
     """
-    FastAPI lifespan context that starts DB init + background indexer.
+    FastAPI lifespan context that starts DB init, background indexer, and loads ML models.
     Import this into main.py and pass to FastAPI(lifespan=...).
     """
+    print("[LIFESPAN] Executing startup sequence...")
     from app.core.database import init_db, close_db
+    from app.services.prediction_service import load_ml_resources
+
+    print("[LIFESPAN] Connecting to Intelligence Database...")
+    # Import all models so that SQLAlchemy registers their tables before create_all
+    import app.models.user_model      # noqa: F401
+    import app.models.property_model  # noqa: F401
+    import app.models.auction_model   # noqa: F401
     await init_db()
+    
+    # Load ML models into global memory once to prevent latency
+    load_ml_resources()
+
+    from app.services.property_state.property_sync_service import register_sync_listeners
+    print("[LIFESPAN] Starting Property Global Event Bus & WebSocket listeners...")
+    register_sync_listeners()
 
     # Start background indexer task
     indexer_task = asyncio.create_task(_indexer_loop())

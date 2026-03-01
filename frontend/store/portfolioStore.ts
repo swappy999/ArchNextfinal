@@ -25,6 +25,8 @@ interface PortfolioAsset {
 
 interface PortfolioState {
     assets: PortfolioAsset[]
+    active_auctions: any[]
+    my_bids: any[]
     total_current_value: number
     total_invested: number
     loading: boolean
@@ -34,6 +36,8 @@ interface PortfolioState {
 
 export const usePortfolioStore = create<PortfolioState>((set, get) => ({
     assets: [],
+    active_auctions: [],
+    my_bids: [],
     total_current_value: 0,
     total_invested: 0,
     loading: false,
@@ -42,22 +46,27 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
     fetchPortfolio: async () => {
         const token = useAuthStore.getState().accessToken
         if (!token) return
-        // Skip if data is fresh (< 60s old)
-        const now = Date.now()
-        if (get().assets.length > 0 && now - get()._lastFetched < 60000) return
+
         set({ loading: true })
         try {
             const data = await api.get('/portfolio/me', token)
             if (!data) return set({ loading: false })
-            const portfolio = data?.properties || data?.assets || []
-            const totalValue = portfolio.reduce((acc: number, a: any) => acc + (a.current_value || a.current_price || 0), 0)
-            const totalInvested = portfolio.reduce((acc: number, a: any) => acc + (a.purchase_price || 0), 0)
+
+            const portfolio = data?.properties || []
+            const active_auctions = data?.active_auctions || []
+            const my_bids = data?.my_bids || []
+
+            const totalValue = data?.total_current_value || portfolio.reduce((acc: number, a: any) => acc + (a.current_price || 0), 0)
+            const totalInvested = portfolio.reduce((acc: number, a: any) => acc + (a.purchase_price || a.current_price || 0), 0)
+
             set({
                 assets: portfolio,
-                total_current_value: data?.total_current_value || totalValue,
+                active_auctions: active_auctions,
+                my_bids: my_bids,
+                total_current_value: totalValue,
                 total_invested: totalInvested,
                 loading: false,
-                _lastFetched: now,
+                _lastFetched: Date.now(),
             })
         } catch (e: any) {
             console.warn('[Portfolio] Fetch error:', e?.message)

@@ -1,12 +1,26 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.pool import NullPool
 from app.core.config import settings
 from app.models.base import Base
 
 # SQLAlchemy Async Engine
+# We use a small local pool with pre_ping to handle Supavisor's aggressive disconnects
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=False,  # Set to True for SQL query logging
-    pool_pre_ping=True
+    echo=False,
+    pool_size=5,            # Small local pool to reduce connect/disconnect churn
+    max_overflow=10,
+    pool_recycle=300,      # Recycle connections every 5 minutes
+    pool_pre_ping=True,    # Verify connection is alive before using it
+    connect_args={
+        "prepared_statement_cache_size": 0,
+        "statement_cache_size": 0,
+        "command_timeout": 30,
+        "server_settings": {
+            "application_name": "archnext",
+            "statement_timeout": "30000"
+        }
+    }
 )
 
 # Async Session Factory
@@ -25,9 +39,9 @@ async def init_db():
         async with engine.begin() as conn:
             # await conn.run_sync(Base.metadata.drop_all) # Optional reset
             await conn.run_sync(Base.metadata.create_all)
-        print("[OK] PostgreSQL database connected and tables verified.")
+        print("[OK] PostgreSQL Engine: Active Intelligence Layer connected.")
     except Exception as e:
-        print(f"[ERROR] Error initializing PostgreSQL database: {e}")
+        print(f"[ERROR] Engine Failure during PostgreSQL startup: {e}")
 
 async def close_db():
     if engine:

@@ -9,10 +9,10 @@ def cluster_properties(properties: list) -> list:
     cluster_map = {}
     
     for p in properties:
-        coords = p.get("location", {}).get("coordinates")
-        if not coords:
+        lng = p.get("longitude")
+        lat = p.get("latitude")
+        if lng is None or lat is None:
             continue
-        lng, lat = coords
         # Round to 2 decimal places (~1km grid)
         key = (round(lng, 2), round(lat, 2))
         cluster_map.setdefault(key, []).append(p)

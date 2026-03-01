@@ -12,11 +12,11 @@ def generate_heatmap(properties: list) -> list:
     
     return [
         {
-            "longitude": p["location"]["coordinates"][0],
-            "latitude": p["location"]["coordinates"][1],
+            "longitude": p.get("longitude"),
+            "latitude": p.get("latitude"),
             "weight": round(p.get("price", 0) / max_price, 4),
             "raw_price": p.get("price", 0)
         }
         for p in properties
-        if p.get("location", {}).get("coordinates")
+        if p.get("longitude") is not None and p.get("latitude") is not None
     ]

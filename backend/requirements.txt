@@ -16,3 +16,10 @@ email-validator
 fastapi-mail
 google-auth
 slowapi
+geopandas
+joblib
+rtree
+shapely
+
+google-cloud-speech
+

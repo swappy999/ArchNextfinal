@@ -26,6 +26,16 @@ async def get_user_by_wallet(wallet: str):
         result = await session.execute(select(UserDB).where(UserDB.wallet_address == wallet))
         return _to_dict(result.scalars().first())
 
+async def get_user_by_id(user_id: str):
+    from uuid import UUID
+    async with AsyncSessionLocal() as session:
+        try:
+            uid = UUID(user_id) if isinstance(user_id, str) else user_id
+            result = await session.execute(select(UserDB).where(UserDB.id == uid))
+            return _to_dict(result.scalars().first())
+        except:
+            return None
+
 async def create_user(user_data: dict):
     async with AsyncSessionLocal() as session:
         user = UserDB(**user_data)

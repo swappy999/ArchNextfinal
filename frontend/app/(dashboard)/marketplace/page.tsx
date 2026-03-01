@@ -1,35 +1,92 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { ShoppingBag, Tag, Wallet, Loader2, ExternalLink, Building2, Fingerprint, Sparkles, Cpu, ScanLine } from 'lucide-react'
+import { useEffect, useState, useMemo } from 'react'
+import { motion } from 'framer-motion'
+import {
+    ShoppingBag, Wallet, Loader2, Building2, Fingerprint,
+    Cpu, Gavel, TrendingUp, Brain, Shield, Flame, CheckCircle2
+} from 'lucide-react'
 import { useMarketplaceStore } from '@/store/marketplaceStore'
-import { useWalletStore } from '@/store/walletStore'
+import { useAuthStore } from '@/store/authStore'
+import { useAuctionStore } from '@/store/auctionStore'
 import { formatCurrency, shortAddress, cn } from '@/lib/utils'
+import Link from 'next/link'
+import { Toaster, toast } from 'react-hot-toast'
 
-import { toast } from 'react-hot-toast'
+// ─── AI Valuation Badge ──────────────────────────────────────────────────────
+function AIValuationBadge({ valuation }: { valuation: any }) {
+    if (!valuation) return null
+    const tierColors: Record<string, string> = {
+        A: 'from-amber-500 to-orange-600 border-amber-500/30',
+        B: 'from-cyan-500 to-blue-600 border-cyan-500/30',
+        C: 'from-slate-500 to-slate-600 border-slate-500/30',
+    }
+    const tierColor = tierColors[valuation.market_tier] || tierColors.C
 
+    return (
+        <div className="space-y-3 pt-4 border-t border-white/[0.04]">
+            <div className="flex items-center gap-2">
+                <Brain size={12} className="text-cyan-400" />
+                <span className="text-[9px] font-black text-cyan-400 uppercase tracking-[0.2em]">AI Valuation</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+                <div className="glass-panel p-3 rounded-xl border border-white/[0.06]">
+                    <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Per Sq.Ft</p>
+                    <p className="text-sm font-black text-white">₹ {valuation.predicted_price_per_sqft?.toLocaleString('en-IN')}</p>
+                </div>
+                <div className="glass-panel p-3 rounded-xl border border-white/[0.06]">
+                    <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Total Est.</p>
+                    <p className="text-sm font-black text-emerald-400">₹ {(valuation.total_estimated_value / 10000000)?.toFixed(2)} Cr</p>
+                </div>
+            </div>
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <Shield size={10} className="text-emerald-400" />
+                    <span className="text-[9px] font-bold text-slate-500">Confidence: <span className="text-emerald-400">{valuation.confidence}%</span></span>
+                </div>
+                <span className={`text-[8px] font-black px-2 py-1 rounded-lg bg-gradient-to-r ${tierColor} text-white uppercase tracking-widest`}>
+                    Zone {valuation.market_tier}
+                </span>
+            </div>
+        </div>
+    )
+}
+
+// ─── NFT Card ────────────────────────────────────────────────────────────────
 function NFTCard({ listing, index }: { listing: any, index: number }) {
     const { buy, buyingId } = useMarketplaceStore()
-    const { isConnected, connect } = useWalletStore()
+    const userWallet = useAuthStore((s: any) => s.user?.wallet_address)?.toLowerCase()
+
     const isBuying = buyingId === listing.id
+    const [buying, setBuying] = useState(false)
 
-    const handleBuy = async () => {
-        if (listing.is_nft && !isConnected) {
-            connect()
-            toast('Connect wallet to acquire on-chain asset.', { icon: '🦊' })
-            return
-        }
+    const isSold = listing.status === 'sold'
+    const isOwner = listing.owner_id && userWallet && (listing.owner_id.toLowerCase() === userWallet || listing.seller?.toLowerCase() === userWallet)
 
+    const handleBuy = async (e: React.MouseEvent) => {
+        e.stopPropagation()
+        if (isSold || isOwner) return
         try {
-            await buy(listing.id, listing.price)
-            if (listing.is_nft) {
-                toast('Transaction sent to MetaMask.', { icon: '⚡' })
-            } else {
-                toast.success('Asset acquired successfully!')
-            }
+            await buy(listing.id)
         } catch (e: any) {
-            toast.error(e.message || 'Failed to acquire asset')
+            console.error(e)
+        }
+    }
+
+    const { createAuction } = useAuctionStore()
+    const handleBid = async (e: React.MouseEvent) => {
+        e.stopPropagation()
+        // Simple bid integration: open detail page or use prompt for now
+        const amount = prompt("Enter bid amount (INR):")
+        if (amount) {
+            try {
+                const { api } = await import('@/lib/api')
+                const token = useAuthStore.getState().accessToken
+                await api.post(`/auction/bid/${listing.id}`, { amount: parseFloat(amount) }, token)
+                toast.success("Bid placed successfully!")
+            } catch (err: any) {
+                toast.error(err.message || "Failed to place bid")
+            }
         }
     }
 
@@ -38,17 +95,30 @@ function NFTCard({ listing, index }: { listing: any, index: number }) {
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: index * 0.02, duration: 0.3 }}
-            className="group relative flex flex-col rounded-[2.5rem] bg-[#0B0F1A]/80 backdrop-blur-md border border-white/[0.06] hover:border-cyan-500/30 transition-all duration-500 overflow-hidden"
+            className={cn(
+                "group relative flex flex-col rounded-[2.5rem] bg-[#0B0F1A]/80 backdrop-blur-md border border-white/[0.06] hover:border-cyan-500/30 transition-all duration-500 overflow-hidden",
+                isSold && "grayscale-[0.5] opacity-80"
+            )}
         >
-            {/* Holographic Shimmer */}
-            <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/10 via-transparent to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+            {/* Holographic Shimmer / Sold Overlay */}
+            {isSold ? (
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[30] flex items-center justify-center p-6">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.5 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="px-6 py-3 rounded-2xl border-2 border-rose-500/50 bg-rose-500/10 text-rose-500 text-xl font-black uppercase tracking-[0.3em] rotate-[-12deg] shadow-[0_0_30px_rgba(244,63,94,0.3)]"
+                    >
+                        SOLD OUT
+                    </motion.div>
+                </div>
+            ) : (
+                <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/10 via-transparent to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+            )}
 
             {/* Visual Container */}
-            <div className="relative h-64 bg-[#05070A] overflow-hidden flex items-center justify-center">
-                {/* Tech Grid Background */}
+            <div className="relative h-56 bg-[#05070A] overflow-hidden flex items-center justify-center">
                 <div className="absolute inset-0 grid-bg opacity-30 group-hover:opacity-50 transition-opacity duration-500" />
 
-                {/* Real Image or Fallback */}
                 {listing.image_url ? (
                     <img
                         src={listing.image_url}
@@ -57,99 +127,127 @@ function NFTCard({ listing, index }: { listing: any, index: number }) {
                     />
                 ) : (
                     <div className="relative z-10 group-hover:scale-110 transition-transform duration-700">
-                        <div className="absolute inset-0 bg-cyan-500/20 blur-3xl rounded-full scale-0 group-hover:scale-150 transition-transform duration-700" />
                         <Building2 size={56} className="text-slate-700 group-hover:text-cyan-400 transition-colors duration-500 relative z-10" />
                     </div>
                 )}
 
-                {/* Dark overlay for text readability if there's an image */}
                 {listing.image_url && <div className="absolute inset-0 bg-gradient-to-t from-[#0B0F1A] via-[#0B0F1A]/40 to-transparent" />}
 
                 {/* Status Badges */}
-                <div className="absolute top-6 left-6 flex flex-col gap-2 relative z-20">
+                <div className="absolute top-5 left-5 flex flex-col gap-2 z-20">
                     <span className="text-[9px] font-black px-3 py-1.5 rounded-xl border border-white/10 bg-black/60 backdrop-blur-md text-slate-400 uppercase tracking-widest shadow-lg">
-                        NODE #{listing.token_id || listing.id}
+                        NODE #{listing.token_id || listing.id?.slice(0, 6)}
                     </span>
-                    {listing.is_nft && (
-                        <span className="text-[9px] font-black px-3 py-1.5 rounded-xl border border-blue-500/30 bg-blue-500/10 backdrop-blur-md text-blue-400 uppercase tracking-widest flex items-center gap-1.5 shadow-lg">
-                            <Fingerprint size={12} /> ON-CHAIN
+                    {isOwner && (
+                        <span className="text-[9px] font-black px-3 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/20 backdrop-blur-md text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 shadow-lg">
+                            <CheckCircle2 size={12} /> YOUR ASSET
                         </span>
                     )}
-                </div>
-
-                {/* AI Verified / Polygonscan Badge */}
-                <div className="absolute top-6 right-6 relative z-20 group/badge">
-                    {listing.is_nft ? (
+                    {listing.is_nft && !isOwner && (
                         <a
-                            href={`https://polygonscan.com/address/0xe11...#readContract`}
+                            href={`https://amoy.polygonscan.com/token/0xe406730EF116B58F0C6007A276185803FF134706?a=${listing.token_id || listing.nft_token_id}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="w-10 h-10 rounded-full bg-blue-500/20 backdrop-blur-md border border-blue-500/40 flex items-center justify-center hover:bg-blue-500/40 transition-colors shadow-lg cursor-pointer"
-                            title="View on Polygonscan"
+                            className="text-[9px] font-black px-3 py-1.5 rounded-xl border border-blue-500/30 bg-blue-500/10 backdrop-blur-md text-blue-400 uppercase tracking-widest flex items-center gap-1.5 shadow-lg hover:bg-blue-500/20 transition-all cursor-pointer"
                         >
-                            <ExternalLink size={16} className="text-blue-300" />
+                            <Fingerprint size={12} /> ON-CHAIN
                         </a>
-                    ) : (
-                        <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur-md border border-emerald-500/20 flex items-center justify-center group-hover:border-emerald-500/40 transition-colors shadow-lg" title="AI Verified Asset">
-                            <Sparkles size={16} className="text-emerald-500" />
-                        </div>
                     )}
                 </div>
 
+                {/* Market Tier Badge */}
+                {listing.ai_valuation && (
+                    <div className="absolute top-5 right-5 z-20">
+                        <div className={cn(
+                            "text-[9px] font-black px-3 py-1.5 rounded-xl backdrop-blur-md uppercase tracking-widest shadow-lg flex items-center gap-1.5",
+                            listing.ai_valuation.market_tier === 'A' ? 'border border-amber-500/30 bg-amber-500/10 text-amber-400' :
+                                listing.ai_valuation.market_tier === 'B' ? 'border border-cyan-500/30 bg-cyan-500/10 text-cyan-400' :
+                                    'border border-slate-500/30 bg-slate-500/10 text-slate-400'
+                        )}>
+                            <Flame size={10} />
+                            ZONE {listing.ai_valuation.market_tier}
+                        </div>
+                    </div>
+                )}
+
                 {/* Bottom Info Bar */}
-                <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#05070A] to-transparent translate-y-full group-hover:translate-y-0 transition-transform duration-500 flex items-center gap-3">
+                <div className="absolute bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-[#05070A] to-transparent translate-y-full group-hover:translate-y-0 transition-transform duration-500 flex items-center gap-3 z-20">
                     <Cpu size={14} className="text-emerald-400" />
                     <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">AI Verified Asset</span>
                 </div>
             </div>
 
             {/* Content Section */}
-            <div className="p-8 flex flex-col gap-6 flex-1 relative z-10">
+            <div className="p-6 flex flex-col gap-4 flex-1 relative z-10">
                 <div className="space-y-2">
-                    <h3 className="text-xl font-black text-white truncate tracking-tight group-hover:text-cyan-50 transition-colors">
-                        {listing.title || listing.property_title || 'Autonomous Asset'}
-                    </h3>
-                    <div className="flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wide group-hover:text-slate-400 transition-colors">
-                            {listing.seller ? shortAddress(listing.seller) : 'ArchNext Protocol'}
-                        </p>
+                    <Link href={`/properties/${listing.id}`}>
+                        <h3 className="text-lg font-black text-white truncate tracking-tight group-hover:text-cyan-400 transition-colors cursor-pointer">
+                            {listing.title || listing.property_title || 'Autonomous Asset'}
+                        </h3>
+                    </Link>
+                    <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-black text-slate-600 uppercase">Owner:</span>
+                            <span className="text-[10px] font-black text-white">{listing.owner?.name || 'Protocol'}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-black text-slate-600 uppercase">Wallet:</span>
+                            <span className="text-[9px] font-bold text-cyan-500/80 font-mono tracking-tighter">
+                                {listing.owner?.wallet ? shortAddress(listing.owner.wallet) : '0x...'}
+                            </span>
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex items-end justify-between pt-6 border-t border-white/[0.04] mt-auto">
+                {/* AI Valuation Badge */}
+                <AIValuationBadge valuation={listing.ai_valuation} />
+
+                <div className="flex items-end justify-between pt-4 border-t border-white/[0.04] mt-auto">
                     <div className="flex-1">
-                        <p className="text-[9px] font-black text-slate-600 uppercase tracking-[0.2em] mb-1">Current Valuation</p>
-                        <p className="text-xl sm:text-2xl font-black text-white tracking-tighter group-hover:text-cyan-400 transition-colors glow-text truncate pr-2">
+                        <p className="text-[9px] font-black text-slate-600 uppercase tracking-[0.2em] mb-1">
+                            {listing.status === 'auction' ? 'Highest Bid' : 'Listed Price'}
+                        </p>
+                        <p className="text-xl font-black text-white tracking-tighter group-hover:text-cyan-400 transition-colors glow-text truncate pr-2">
                             {formatCurrency(listing.price || 0)}
                         </p>
                     </div>
 
-                    <button
-                        onClick={handleBuy}
-                        disabled={isBuying}
-                        className={cn(
-                            "relative flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-500 overflow-hidden group/btn shrink-0 whitespace-nowrap",
-                            listing.is_nft && !isConnected
-                                ? "bg-cyan-600/10 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/20"
-                                : "bg-white text-black hover:bg-cyan-50 shadow-xl hover:shadow-cyan-500/20"
+                    <div className="flex gap-2">
+                        {listing.status === 'auction' ? (
+                            <button
+                                onClick={handleBid}
+                                disabled={isOwner || isSold}
+                                className="px-4 py-3 rounded-xl bg-cyan-500 text-white text-[9px] font-black uppercase tracking-widest hover:bg-cyan-400 disabled:opacity-50"
+                            >
+                                <Gavel size={12} className="inline mr-2" />
+                                Place Bid
+                            </button>
+                        ) : listing.status === 'listed' ? (
+                            <button
+                                onClick={handleBuy}
+                                disabled={isBuying || buying || isSold || isOwner}
+                                className={cn(
+                                    "relative flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] transition-all duration-500 overflow-hidden shrink-0 whitespace-nowrap shadow-xl",
+                                    (isSold || isOwner) ? "bg-slate-800 text-slate-500 cursor-not-allowed" : "bg-white text-black hover:bg-cyan-50 hover:shadow-cyan-500/20"
+                                )}
+                            >
+                                {(isBuying || buying) ? <Loader2 size={12} className="animate-spin" /> : <Wallet size={12} />}
+                                <span className="relative z-10">
+                                    {(isBuying || buying) ? 'PROCESSING' : isSold ? 'SOLD' : isOwner ? 'YOUR ASSET' : 'ACQUIRE'}
+                                </span>
+                            </button>
+                        ) : isOwner ? (
+                            <Link href="/portfolio">
+                                <button className="px-4 py-3 rounded-xl bg-white/[0.05] border border-white/[0.1] text-white text-[9px] font-black uppercase tracking-widest hover:bg-white/[0.08]">
+                                    List Asset
+                                </button>
+                            </Link>
+                        ) : (
+                            <button disabled className="px-4 py-3 rounded-xl bg-slate-800 text-slate-600 text-[9px] font-black uppercase tracking-widest cursor-not-allowed">
+                                Not for Sale
+                            </button>
                         )}
-                    >
-                        {isBuying ? <Loader2 size={12} className="animate-spin" /> : <Wallet size={12} />}
-                        <span className="relative z-10 hidden sm:inline-block">
-                            {isBuying
-                                ? 'PROCESSING'
-                                : listing.is_nft && !isConnected
-                                    ? 'CONNECT WALLET'
-                                    : 'ACQUIRE ASSET'}
-                        </span>
-                        <span className="relative z-10 inline-block sm:hidden">
-                            {isBuying ? 'WAIT' : listing.is_nft && !isConnected ? 'CONNECT' : 'ACQUIRE'}
-                        </span>
-                        {(!listing.is_nft || isConnected) && (
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700" />
-                        )}
-                    </button>
+                    </div>
                 </div>
             </div>
         </motion.div>
@@ -162,11 +260,23 @@ export default function MarketplacePage() {
 
     useEffect(() => { fetchListings() }, [])
 
-    const filtered = listings.filter((l: any) => {
-        if (filter === 'nft') return l.is_nft
-        if (filter === 'standard') return !l.is_nft
-        return true
-    })
+    const filtered = useMemo(() => {
+        return listings.filter((l: any) => {
+            if (filter === 'nft') return l.is_nft
+            if (filter === 'standard') return !l.is_nft
+            return true
+        })
+    }, [listings, filter])
+
+    const stats = useMemo(() => {
+        const withAI = listings.filter((l: any) => l.ai_valuation)
+        const avgConfidence = withAI.length > 0
+            ? (withAI.reduce((s: number, l: any) => s + (l.ai_valuation?.confidence || 0), 0) / withAI.length).toFixed(1)
+            : '—'
+        const tierA = withAI.filter((l: any) => l.ai_valuation?.market_tier === 'A').length
+        const tierB = withAI.filter((l: any) => l.ai_valuation?.market_tier === 'B').length
+        return { avgConfidence, tierA, tierB, total: listings.length }
+    }, [listings])
 
     const categories = [
         { id: 'all', label: 'All Units', icon: ShoppingBag },
@@ -175,17 +285,18 @@ export default function MarketplacePage() {
     ]
 
     return (
-        <div className="space-y-12">
+        <div className="space-y-10">
+            <Toaster position="top-right" reverseOrder={false} />
             {/* Header Section */}
             <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-8 px-2">
                 <div className="space-y-4">
                     <div className="flex items-center gap-3">
-                        <ScanLine size={16} className="text-cyan-500 animate-pulse" />
-                        <span className="text-[11px] font-black text-cyan-500 uppercase tracking-[0.3em]">Protocol Marketplace</span>
+                        <Gavel size={16} className="text-cyan-500 animate-pulse" />
+                        <span className="text-[11px] font-black text-cyan-500 uppercase tracking-[0.3em]">AI-Valued Auction Platform</span>
                     </div>
                     <div className="space-y-2">
                         <h1 className="text-5xl font-black text-white tracking-tighter text-gradient leading-none">Marketplace</h1>
-                        <p className="text-slate-400 max-w-xl text-lg font-medium">Acquire fractionalized, AI-validated urban assets with institutional-grade security.</p>
+                        <p className="text-slate-400 max-w-xl text-lg font-medium">{"India's First AI-Valued, Blockchain-Secured Urban Property Auction Engine."}</p>
                     </div>
                 </div>
 
@@ -202,17 +313,50 @@ export default function MarketplacePage() {
                                     : "text-slate-500 hover:text-white hover:bg-white/[0.04]"
                             )}
                         >
-                            <Icon size={14} className={cn("relative z-10", filter === id ? "text-black" : "text-slate-500 group-hover:text-white")} />
-                            <span className="relative z-10">{label}</span>
+                            <Icon size={14} />
+                            <span>{label}</span>
                         </button>
                     ))}
                 </div>
             </div>
 
+            {/* AI Intelligence Stats Bar */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-2">
+                <div className="glass-panel p-5 rounded-2xl border border-white/[0.06]">
+                    <div className="flex items-center gap-2 mb-2">
+                        <Brain size={14} className="text-cyan-400" />
+                        <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">AI Confidence</span>
+                    </div>
+                    <p className="text-2xl font-black text-white">{stats.avgConfidence}%</p>
+                </div>
+                <div className="glass-panel p-5 rounded-2xl border border-white/[0.06]">
+                    <div className="flex items-center gap-2 mb-2">
+                        <Flame size={14} className="text-amber-400" />
+                        <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Zone A (Premium)</span>
+                    </div>
+                    <p className="text-2xl font-black text-amber-400">{stats.tierA}</p>
+                </div>
+                <div className="glass-panel p-5 rounded-2xl border border-white/[0.06]">
+                    <div className="flex items-center gap-2 mb-2">
+                        <TrendingUp size={14} className="text-cyan-400" />
+                        <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Zone B (Growth)</span>
+                    </div>
+                    <p className="text-2xl font-black text-cyan-400">{stats.tierB}</p>
+                </div>
+                <div className="glass-panel p-5 rounded-2xl border border-white/[0.06]">
+                    <div className="flex items-center gap-2 mb-2">
+                        <ShoppingBag size={14} className="text-slate-400" />
+                        <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Total Listed</span>
+                    </div>
+                    <p className="text-2xl font-black text-white">{stats.total}</p>
+                </div>
+            </div>
+
+            {/* Content */}
             {loading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-                    {[...Array(8)].map((_, i) => (
-                        <div key={i} className="h-[500px] rounded-[2.5rem] glass-panel bg-white/[0.02] animate-pulse relative overflow-hidden">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {[...Array(6)].map((_, i) => (
+                        <div key={i} className="h-[560px] rounded-[2.5rem] glass-panel bg-white/[0.02] animate-pulse relative overflow-hidden">
                             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.02] to-transparent animate-shimmer" />
                         </div>
                     ))}
@@ -227,8 +371,8 @@ export default function MarketplacePage() {
                         <ShoppingBag size={40} className="text-slate-800" />
                         <div className="absolute inset-0 border border-cyan-500/10 rounded-full animate-pulse" />
                     </div>
-                    <h2 className="text-2xl font-black text-slate-300 tracking-tight uppercase tracking-widest">Market Offline</h2>
-                    <p className="text-slate-500 mt-2 max-w-xs text-center font-medium">No assets match current search criteria. Network sync recommended.</p>
+                    <h2 className="text-2xl font-black text-slate-300 tracking-tight">Market Offline</h2>
+                    <p className="text-slate-500 mt-2 max-w-xs text-center font-medium">No assets match current search criteria.</p>
                     <button
                         onClick={() => setFilter('all')}
                         className="mt-10 px-8 py-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em] hover:bg-cyan-500/10 hover:border-cyan-500/20 transition-all"
@@ -237,7 +381,7 @@ export default function MarketplacePage() {
                     </button>
                 </motion.div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {filtered.map((listing: any, i: number) => (
                         <NFTCard key={listing.id || i} listing={listing} index={i} />
                     ))}
@@ -258,8 +402,8 @@ export default function MarketplacePage() {
                 </div>
                 <div className="flex items-center gap-8">
                     <div className="text-right">
-                        <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">Network Volume</p>
-                        <p className="text-sm font-black text-white">4,208.5 ETH</p>
+                        <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">Network</p>
+                        <p className="text-sm font-black text-white">Polygon Amoy</p>
                     </div>
                     <div className="w-px h-8 bg-white/10" />
                     <div className="text-right">
@@ -274,5 +418,3 @@ export default function MarketplacePage() {
         </div>
     )
 }
-
-

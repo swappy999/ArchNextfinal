@@ -10,7 +10,7 @@ async def send_verification_email(email: str, code: str):
 
     conf = ConnectionConfig(
         MAIL_USERNAME=settings.SMTP_EMAIL,
-        MAIL_PASSWORD=settings.SMTP_PASSWORD,
+        MAIL_PASSWORD=settings.SMTP_PASSWORD.replace(" ", ""), # Clean spaces
         MAIL_FROM=settings.SMTP_EMAIL,
         MAIL_PORT=587,
         MAIL_SERVER="smtp.gmail.com",
@@ -22,14 +22,18 @@ async def send_verification_email(email: str, code: str):
     )
 
     message = MessageSchema(
-        subject="Your Verification Code",
+        subject="ArchNext — Verification Code",
         recipients=[email],
-        body=f"Your verification code is: {code}",
+        body=f"Your ArchNext verification code is: {code}",
         subtype="plain"
     )
 
-    fm = FastMail(conf)
-    await fm.send_message(message)
+    try:
+        fm = FastMail(conf)
+        await fm.send_message(message)
+        print(f"[EMAIL] Verification sent to {email}")
+    except Exception as e:
+        print(f"[EMAIL_ERROR] Failed to send to {email}: {e}")
 
 async def send_recovery_email(email: str, reset_link: str):
     if not settings.SMTP_EMAIL or not settings.SMTP_PASSWORD:
@@ -40,7 +44,7 @@ async def send_recovery_email(email: str, reset_link: str):
 
     conf = ConnectionConfig(
         MAIL_USERNAME=settings.SMTP_EMAIL,
-        MAIL_PASSWORD=settings.SMTP_PASSWORD,
+        MAIL_PASSWORD=settings.SMTP_PASSWORD.replace(" ", ""), # Clean spaces
         MAIL_FROM=settings.SMTP_EMAIL,
         MAIL_PORT=587,
         MAIL_SERVER="smtp.gmail.com",
@@ -52,11 +56,15 @@ async def send_recovery_email(email: str, reset_link: str):
     )
 
     message = MessageSchema(
-        subject="ArchNext - Reset Your Password",
+        subject="ArchNext — Reset Your Password",
         recipients=[email],
         body=f"Click the link below to reset your password:\n\n{reset_link}\n\nThis link expires in 15 minutes.\n\nIf you did not request this, please ignore this email.",
         subtype="plain"
     )
 
-    fm = FastMail(conf)
-    await fm.send_message(message)
+    try:
+        fm = FastMail(conf)
+        await fm.send_message(message)
+        print(f"[EMAIL] Recovery link sent to {email}")
+    except Exception as e:
+        print(f"[EMAIL_ERROR] Recovery failure for {email}: {e}")

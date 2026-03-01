@@ -12,6 +12,11 @@ from app.api.routes import nft
 from app.api.routes import marketplace
 from app.api.routes import portfolio
 from app.api.routes import analytics
+from app.api.routes import ai
+from app.api.routes import voice
+from app.api.routes import auction
+from app.api.routes import verification
+from app.api.ws import router as ws_router
 
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
@@ -77,3 +82,8 @@ app.include_router(nft.router)
 app.include_router(marketplace.router)
 app.include_router(portfolio.router)
 app.include_router(analytics.router)
+app.include_router(ai.router)
+app.include_router(voice.router, prefix="/voice", tags=["Voice"])
+app.include_router(auction.router)
+app.include_router(verification.router)
+app.include_router(ws_router)

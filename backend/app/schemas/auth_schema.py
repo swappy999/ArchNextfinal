@@ -30,9 +30,9 @@ class EmailSignup(BaseModel):
     @field_validator("username")
     @classmethod
     def validate_username(cls, v: str) -> str:
-        """SECURITY: Only allow safe characters in usernames."""
-        if not re.match(r'^[a-zA-Z0-9_]+$', v):
-            raise ValueError("Username may only contain letters, numbers, and underscores")
+        """SECURITY: Allow characters common in names while preventing injection."""
+        if not re.match(r'^[a-zA-Z0-9._\s-]+$', v):
+            raise ValueError("Username may contain letters, numbers, spaces, dots, hyphens, and underscores")
         return v.strip()
 
     @field_validator("password")

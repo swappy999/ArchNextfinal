@@ -8,6 +8,7 @@ import {
     RefreshCw, CheckCircle2, AlertTriangle, Loader2,
     ChevronRight, Bell, Globe, Cpu, Save, Pencil, X
 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/store/authStore'
 import { useWalletStore } from '@/store/walletStore'
 import { api } from '@/lib/api'
@@ -39,6 +40,7 @@ function SettingsCard({ children, className, delay = 0 }: { children: React.Reac
    SETTINGS PAGE — Fully Live Data
    ══════════════════════════════════════════════════════════════ */
 export default function SettingsPage() {
+    const router = useRouter()
     const { user, accessToken, walletConnected, logout } = useAuthStore()
     const { address: walletAddress, isConnected: walletStoreConnected } = useWalletStore()
     const [profile, setProfile] = useState<any>(null)
@@ -419,8 +421,10 @@ export default function SettingsPage() {
                                     {copied === 'token' ? '✓ Copied!' : 'Copy Token'}
                                 </button>
                                 <button
-                                    onClick={() => logout()}
-
+                                    onClick={() => {
+                                        logout()
+                                        router.push('/')
+                                    }}
                                     className="py-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-[10px] font-black text-rose-400 uppercase tracking-widest hover:bg-rose-500/20 transition-all"
                                 >
                                     Revoke Session

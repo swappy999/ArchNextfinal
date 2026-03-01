@@ -132,7 +132,7 @@ export default function SignupPage() {
                             type="text"
                             value={form.name}
                             onChange={(e) => setForm({ ...form, name: e.target.value })}
-                            placeholder="Full name"
+                            placeholder="Full name or username"
                             required
                             autoComplete="name"
                         />

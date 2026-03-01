@@ -21,8 +21,11 @@ class Settings(BaseSettings):
     POLYGON_RPC: str | None = None
     
     CONTRACT_ADDRESS: str | None = os.getenv("CONTRACT_ADDRESS") or load_contract_info("contract_address.txt")
-    NFT_CONTRACT_ADDRESS: str | None = os.getenv("NFT_CONTRACT_ADDRESS") or load_contract_info("property_nft_address.txt")
+    NFT_CONTRACT_ADDRESS: str | None = os.getenv("NFT_CONTRACT_ADDRESS") or load_contract_info("nft_address.txt")
     MARKETPLACE_ADDRESS: str | None = os.getenv("MARKETPLACE_ADDRESS") or load_contract_info("marketplace_address.txt")
+    GEMINI_API_KEY_CHATBOT: str | None = None
+    GEMINI_API_KEY_VERIFICATION: str | None = None
+    GOOGLE_APPLICATION_CREDENTIALS: str | None = None
     
     WALLET_ADDRESS: str | None = None
     PRIVATE_KEY: str | None = None

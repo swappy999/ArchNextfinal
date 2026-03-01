@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 import RouteGuard from '@/components/auth/RouteGuard'
 import { Toaster } from 'react-hot-toast'
+import ArchBotWidget from '@/components/archbot/ArchBotWidget'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -52,6 +53,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               }
             }}
           />
+          <ArchBotWidget />
         </RouteGuard>
       </body>
     </html>

@@ -185,7 +185,7 @@ export default function Navbar() {
                                         </div>
                                     </Link>
                                     <button
-                                        onClick={() => { logout(); setProfileOpen(false) }}
+                                        onClick={() => { logout(); setProfileOpen(false); router.push('/') }}
                                         className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-[10px] font-black text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-all uppercase tracking-widest"
                                     >
                                         <LogOut size={16} />

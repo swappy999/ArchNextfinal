@@ -19,20 +19,36 @@ class PropertyDB(Base):
     images = Column(JSON, default=list)
     features = Column(JSON, default=list)
     status = Column(String, default="available")
+    nft_token_id = Column(Float, nullable=True) # Will use Float for token ID to match sqlite/postgres laxness or Integer
+    is_nft = Column(Float, default=0.0) # Actually we can just use Float and treat 1.0 as true or use Boolean
+    predicted_price = Column(Float, nullable=True)
+    is_verified = Column(Float, default=0.0)
+    
+    # Marketplace / Auction / Verification Extensions
+    listing_price_matic = Column(Float, default=0.0)
+    listing_price_wei = Column(Float, default=0.0) # Using Float for BigInt approximation or just storing large numbers
+    verification_hash = Column(String, nullable=True)
+    verification_score = Column(Float, nullable=True)
+    last_tx_hash = Column(String, nullable=True)
+    owner_wallet = Column(String, nullable=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class Property(BaseModel):
     id: Optional[str] = None
     title: str
     description: str
     price: float
+    area_sqft: float = 1200.0
     location: dict
     owner_id: str
     blockchain_hash: Optional[str] = None
     images: List[str] = []
     features: List[str] = []
     status: str = "available"
+    predicted_price: Optional[float] = None
+    is_verified: bool = False
     created_at: datetime = datetime.utcnow()
     updated_at: datetime = datetime.utcnow()
 

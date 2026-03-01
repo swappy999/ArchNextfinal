@@ -5,7 +5,7 @@ All public auth endpoints are rate-limited to prevent brute-force
 and credential stuffing attacks (OWASP A07:2021).
 """
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.schemas.auth_schema import (
     EmailSignup, EmailLogin, VerifyEmailCode, ForgotPassword,
@@ -72,15 +72,15 @@ async def logout(
 # ─── Signup ──────────────────────────────────────────────────────────────────
 @router.post("/signup")
 @limiter.limit(AUTH_LIMIT)  # SECURITY: 5/min per IP
-async def signup(request: Request, data: EmailSignup):
-    return await email_signup(data)
+async def signup(request: Request, data: EmailSignup, background_tasks: BackgroundTasks):
+    return await email_signup(data, background_tasks)
 
 
 # ─── Login ───────────────────────────────────────────────────────────────────
 @router.post("/login")
 @limiter.limit(AUTH_LIMIT)  # SECURITY: 5/min per IP
-async def login(request: Request, data: EmailLogin):
-    return await email_login(data)
+async def login(request: Request, data: EmailLogin, background_tasks: BackgroundTasks):
+    return await email_login(data, background_tasks)
 
 
 # ─── Email Verification ─────────────────────────────────────────────────────
@@ -93,15 +93,15 @@ async def verify_email(request: Request, data: VerifyEmailCode):
 # ─── Forgot Password ────────────────────────────────────────────────────────
 @router.post("/forgot-password")
 @limiter.limit(VERIFY_LIMIT)  # SECURITY: 3/min per IP (prevents email enumeration spam)
-async def forgot_password(request: Request, data: ForgotPassword):
-    return await forgot_password_service(data.email)
+async def forgot_password(request: Request, data: ForgotPassword, background_tasks: BackgroundTasks):
+    return await forgot_password_service(data.email, background_tasks)
 
 
 # ─── Resend Verification ────────────────────────────────────────────────────
 @router.post("/resend-verification")
 @limiter.limit(VERIFY_LIMIT)  # SECURITY: 3/min per IP
-async def resend_verification(request: Request, data: ResendVerification):
-    return await resend_verification_service(data.email)
+async def resend_verification(request: Request, data: ResendVerification, background_tasks: BackgroundTasks):
+    return await resend_verification_service(data.email, background_tasks)
 
 
 # ─── Reset Password ─────────────────────────────────────────────────────────

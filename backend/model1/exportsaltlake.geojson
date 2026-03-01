@@ -1,0 +1,788 @@
+{
+  "type": "FeatureCollection",
+  "generator": "ChatGPT Synthetic Ward Dataset Generator",
+  "copyright": "Synthetic data for ML experimentation only",
+  "timestamp": "2026-02-26T19:28:31.922497Z",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_1",
+      "properties": {
+        "@id": "way/saltlake_block_1",
+        "block": "AJ",
+        "ward": 29,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.4055,
+              22.571
+            ],
+            [
+              88.4075,
+              22.571
+            ],
+            [
+              88.4075,
+              22.573
+            ],
+            [
+              88.4055,
+              22.573
+            ],
+            [
+              88.4055,
+              22.571
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_2",
+      "properties": {
+        "@id": "way/saltlake_block_2",
+        "block": "AK",
+        "ward": 29,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.4095,
+              22.5695
+            ],
+            [
+              88.41149999999999,
+              22.5695
+            ],
+            [
+              88.41149999999999,
+              22.5715
+            ],
+            [
+              88.4095,
+              22.5715
+            ],
+            [
+              88.4095,
+              22.5695
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_3",
+      "properties": {
+        "@id": "way/saltlake_block_3",
+        "block": "AG",
+        "ward": 30,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.4145,
+              22.5685
+            ],
+            [
+              88.4165,
+              22.5685
+            ],
+            [
+              88.4165,
+              22.5705
+            ],
+            [
+              88.4145,
+              22.5705
+            ],
+            [
+              88.4145,
+              22.5685
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_4",
+      "properties": {
+        "@id": "way/saltlake_block_4",
+        "block": "AH",
+        "ward": 30,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.418,
+              22.568
+            ],
+            [
+              88.42,
+              22.568
+            ],
+            [
+              88.42,
+              22.57
+            ],
+            [
+              88.418,
+              22.57
+            ],
+            [
+              88.418,
+              22.568
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_5",
+      "properties": {
+        "@id": "way/saltlake_block_5",
+        "block": "BG",
+        "ward": 30,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.4205,
+              22.5675
+            ],
+            [
+              88.4225,
+              22.5675
+            ],
+            [
+              88.4225,
+              22.569499999999998
+            ],
+            [
+              88.4205,
+              22.569499999999998
+            ],
+            [
+              88.4205,
+              22.5675
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_6",
+      "properties": {
+        "@id": "way/saltlake_block_6",
+        "block": "BH",
+        "ward": 30,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.4225,
+              22.5665
+            ],
+            [
+              88.4245,
+              22.5665
+            ],
+            [
+              88.4245,
+              22.5685
+            ],
+            [
+              88.4225,
+              22.5685
+            ],
+            [
+              88.4225,
+              22.5665
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_7",
+      "properties": {
+        "@id": "way/saltlake_block_7",
+        "block": "DL",
+        "ward": 32,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.4295,
+              22.5625
+            ],
+            [
+              88.4315,
+              22.5625
+            ],
+            [
+              88.4315,
+              22.5645
+            ],
+            [
+              88.4295,
+              22.5645
+            ],
+            [
+              88.4295,
+              22.5625
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_8",
+      "properties": {
+        "@id": "way/saltlake_block_8",
+        "block": "ED",
+        "ward": 32,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.433,
+              22.5615
+            ],
+            [
+              88.435,
+              22.5615
+            ],
+            [
+              88.435,
+              22.563499999999998
+            ],
+            [
+              88.433,
+              22.563499999999998
+            ],
+            [
+              88.433,
+              22.5615
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_9",
+      "properties": {
+        "@id": "way/saltlake_block_9",
+        "block": "EE",
+        "ward": 32,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.4355,
+              22.5605
+            ],
+            [
+              88.4375,
+              22.5605
+            ],
+            [
+              88.4375,
+              22.5625
+            ],
+            [
+              88.4355,
+              22.5625
+            ],
+            [
+              88.4355,
+              22.5605
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_10",
+      "properties": {
+        "@id": "way/saltlake_block_10",
+        "block": "FB",
+        "ward": 33,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.4045,
+              22.5605
+            ],
+            [
+              88.4065,
+              22.5605
+            ],
+            [
+              88.4065,
+              22.5625
+            ],
+            [
+              88.4045,
+              22.5625
+            ],
+            [
+              88.4045,
+              22.5605
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_11",
+      "properties": {
+        "@id": "way/saltlake_block_11",
+        "block": "FC",
+        "ward": 33,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.4075,
+              22.561
+            ],
+            [
+              88.4095,
+              22.561
+            ],
+            [
+              88.4095,
+              22.563
+            ],
+            [
+              88.4075,
+              22.563
+            ],
+            [
+              88.4075,
+              22.561
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_12",
+      "properties": {
+        "@id": "way/saltlake_block_12",
+        "block": "FD",
+        "ward": 33,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.4095,
+              22.5595
+            ],
+            [
+              88.41149999999999,
+              22.5595
+            ],
+            [
+              88.41149999999999,
+              22.5615
+            ],
+            [
+              88.4095,
+              22.5615
+            ],
+            [
+              88.4095,
+              22.5595
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_13",
+      "properties": {
+        "@id": "way/saltlake_block_13",
+        "block": "GE",
+        "ward": 34,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.4235,
+              22.5585
+            ],
+            [
+              88.4255,
+              22.5585
+            ],
+            [
+              88.4255,
+              22.560499999999998
+            ],
+            [
+              88.4235,
+              22.560499999999998
+            ],
+            [
+              88.4235,
+              22.5585
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_14",
+      "properties": {
+        "@id": "way/saltlake_block_14",
+        "block": "GD",
+        "ward": 34,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.4205,
+              22.558
+            ],
+            [
+              88.4225,
+              22.558
+            ],
+            [
+              88.4225,
+              22.56
+            ],
+            [
+              88.4205,
+              22.56
+            ],
+            [
+              88.4205,
+              22.558
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_15",
+      "properties": {
+        "@id": "way/saltlake_block_15",
+        "block": "HB",
+        "ward": 34,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.426,
+              22.5575
+            ],
+            [
+              88.428,
+              22.5575
+            ],
+            [
+              88.428,
+              22.5595
+            ],
+            [
+              88.426,
+              22.5595
+            ],
+            [
+              88.426,
+              22.5575
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_16",
+      "properties": {
+        "@id": "way/saltlake_block_16",
+        "block": "GA",
+        "ward": 37,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.4085,
+              22.5655
+            ],
+            [
+              88.4105,
+              22.5655
+            ],
+            [
+              88.4105,
+              22.5675
+            ],
+            [
+              88.4085,
+              22.5675
+            ],
+            [
+              88.4085,
+              22.5655
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_17",
+      "properties": {
+        "@id": "way/saltlake_block_17",
+        "block": "IA",
+        "ward": 37,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.411,
+              22.5665
+            ],
+            [
+              88.413,
+              22.5665
+            ],
+            [
+              88.413,
+              22.5685
+            ],
+            [
+              88.411,
+              22.5685
+            ],
+            [
+              88.411,
+              22.5665
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_18",
+      "properties": {
+        "@id": "way/saltlake_block_18",
+        "block": "JA",
+        "ward": 37,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.413,
+              22.567
+            ],
+            [
+              88.41499999999999,
+              22.567
+            ],
+            [
+              88.41499999999999,
+              22.569
+            ],
+            [
+              88.413,
+              22.569
+            ],
+            [
+              88.413,
+              22.567
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_19",
+      "properties": {
+        "@id": "way/saltlake_block_19",
+        "block": "FA",
+        "ward": 38,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.4145,
+              22.5595
+            ],
+            [
+              88.4165,
+              22.5595
+            ],
+            [
+              88.4165,
+              22.5615
+            ],
+            [
+              88.4145,
+              22.5615
+            ],
+            [
+              88.4145,
+              22.5595
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/saltlake_block_20",
+      "properties": {
+        "@id": "way/saltlake_block_20",
+        "block": "KA",
+        "ward": 37,
+        "municipality": "Bidhannagar Municipal Corporation",
+        "city": "Salt Lake",
+        "source": "Synthetic structured dataset for ML training"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              88.4165,
+              22.5685
+            ],
+            [
+              88.4185,
+              22.5685
+            ],
+            [
+              88.4185,
+              22.5705
+            ],
+            [
+              88.4165,
+              22.5705
+            ],
+            [
+              88.4165,
+              22.5685
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

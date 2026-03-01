@@ -16,7 +16,7 @@ def generate_nonce():
     return str(random.randint(100000, 999999))
 
 # ─── Sign In ─────────────────────────────────────────────────────────────────
-async def email_login(data):
+async def email_login(data, background_tasks):
     user = await get_user_by_email(data.email)
     if not user:
         return {"error": "Invalid email or password"}
@@ -34,11 +34,8 @@ async def email_login(data):
         }
     )
 
-    # Send the OTP to the user's email
-    try:
-        await send_verification_email(data.email, code)
-    except Exception as e:
-        print(f"Error sending login OTP: {e}")
+    # Send the OTP asynchronously
+    background_tasks.add_task(send_verification_email, data.email, code)
 
     return {
         "message": "Verification code sent",
@@ -47,7 +44,7 @@ async def email_login(data):
     }
 
 # ─── Sign Up ─────────────────────────────────────────────────────────────────
-async def email_signup(data):
+async def email_signup(data, background_tasks):
     existing_user = await get_user_by_email(data.email)
     if existing_user:
         return {"error": "User already exists"}
@@ -69,11 +66,8 @@ async def email_signup(data):
     token = create_access_token({"email": data.email})
     refresh_token = create_refresh_token({"email": data.email})
 
-    # Send OTP
-    try:
-        await send_verification_email(data.email, code)
-    except Exception as e:
-        print(f"Error sending signup OTP: {e}")
+    # Send OTP asynchronously
+    background_tasks.add_task(send_verification_email, data.email, code)
 
     return {
         "message": "Signup successful",
@@ -108,11 +102,11 @@ async def verify_email_code_service(data):
         "email_verified": True
     }
 
-# ─── Forgot Password (sends recovery LINK) ──────────────────────────────────
-async def forgot_password_service(email: str):
+# ─── Forgot Password (sends OTP code) ──────────────────────────────────
+async def forgot_password_service(email: str, background_tasks):
     user = await get_user_by_email(email)
     if not user:
-        # Return success even if user doesn't exist (security best practice)
+    # Return success even if user doesn't exist (security best practice)
         return {"message": "If that email is registered, a recovery link has been sent."}
 
     # Create a JWT-based reset token (15 min expiry)
@@ -121,10 +115,8 @@ async def forgot_password_service(email: str):
     # Build the recovery link
     reset_link = f"http://localhost:3000/auth/reset-password?token={reset_token}"
 
-    try:
-        await send_recovery_email(email, reset_link)
-    except Exception as e:
-        print(f"Error sending recovery email: {e}")
+    # Send asynchronously
+    background_tasks.add_task(send_recovery_email, email, reset_link)
 
     return {"message": "If that email is registered, a recovery link has been sent."}
 
@@ -182,7 +174,7 @@ async def google_login_service(google_token):
 
 
 # ─── Resend Verification ─────────────────────────────────────────────────────
-async def resend_verification_service(email: str):
+async def resend_verification_service(email: str, background_tasks):
     user = await get_user_by_email(email)
     if not user:
         return {"error": "User not found"}
@@ -193,9 +185,6 @@ async def resend_verification_service(email: str):
         {"verification_code": code}
     )
 
-    try:
-        await send_verification_email(email, code)
-        return {"message": "Verification code resent"}
-    except Exception as e:
-        print(f"Error resending email: {e}")
-        return {"error": "Failed to resend code"}
+    background_tasks.add_task(send_verification_email, email, code)
+    
+    return {"message": "Verification code resent"}

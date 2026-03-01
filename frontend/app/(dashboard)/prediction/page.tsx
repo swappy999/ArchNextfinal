@@ -9,6 +9,8 @@ import { formatCurrency, cn } from '@/lib/utils'
 
 interface PredictionResult {
     predicted_price: number
+    five_year_forecast: number
+    ten_year_forecast: number
     confidence: number
     factors: {
         infrastructure_score: number
@@ -41,8 +43,11 @@ export default function PredictionPage() {
         } catch (err: any) {
             // Graceful mock for demo / when backend is offline
             setTimeout(() => {
+                const mock_price = Math.round(form.size_sqft * (form.bedrooms * 3200 + 12000) * 0.9)
                 setResult({
-                    predicted_price: Math.round(form.size_sqft * (form.bedrooms * 3200 + 12000) * 0.9),
+                    predicted_price: mock_price,
+                    five_year_forecast: mock_price * 1.34,
+                    ten_year_forecast: mock_price * 1.85,
                     confidence: 0.87,
                     factors: {
                         infrastructure_score: 78,
@@ -232,8 +237,26 @@ export default function PredictionPage() {
                                         </div>
                                     </div>
 
+                                    {/* Forecast Values */}
+                                    <div className="grid grid-cols-2 gap-4 mt-4">
+                                        <div className="p-6 rounded-[2rem] bg-indigo-500/10 border border-indigo-500/20 text-center relative overflow-hidden group">
+                                            <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-500/20 blur-2xl rounded-full" />
+                                            <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-2 relative z-10">5-YR AI Projection</p>
+                                            <h4 className="text-2xl font-black text-white tracking-tight relative z-10">
+                                                {formatCurrency(result.five_year_forecast)}
+                                            </h4>
+                                        </div>
+                                        <div className="p-6 rounded-[2rem] bg-fuchsia-500/10 border border-fuchsia-500/20 text-center relative overflow-hidden group">
+                                            <div className="absolute top-0 right-0 w-16 h-16 bg-fuchsia-500/20 blur-2xl rounded-full" />
+                                            <p className="text-[9px] font-black text-fuchsia-400 uppercase tracking-widest mb-2 relative z-10">10-YR AI Projection</p>
+                                            <h4 className="text-2xl font-black text-white tracking-tight relative z-10">
+                                                {formatCurrency(result.ten_year_forecast)}
+                                            </h4>
+                                        </div>
+                                    </div>
+
                                     {/* Signal Factors */}
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
                                         {[
                                             { label: 'Infra Score', value: `${result.factors.infrastructure_score}/100`, icon: Network, color: 'text-blue-400' },
                                             { label: 'Zone Rating', value: result.factors.zone_rating, icon: MapPin, color: 'text-purple-400' },

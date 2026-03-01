@@ -2,14 +2,21 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     Building2, Globe, ShieldCheck, Activity,
     Zap, TrendingUp, ArrowLeft, Fingerprint,
-    Radar, MapPin, Share2, Heart, Cpu, Network
+    Radar, MapPin, Share2, Heart, Cpu, Network, Gavel
 } from 'lucide-react'
 import { usePropertyStore } from '@/store/propertyStore'
-import { formatCurrency, cn } from '@/lib/utils'
+import { useMarketplaceStore } from '@/store/marketplaceStore'
+import { useAuctionStore } from '@/store/auctionStore'
+import { useAuthStore } from '@/store/authStore'
+import { api } from '@/lib/api'
+import { formatCurrency, shortAddress, cn } from '@/lib/utils'
+import { toast, Toaster } from 'react-hot-toast'
+import { Shield, Brain, Loader2, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
 
 function AIRadarChart() {
     return (
@@ -79,8 +86,48 @@ export default function PropertyDetailPage() {
     useEffect(() => {
         if (properties.length === 0) fetchProperties()
         const p = properties.find((x: any) => x.id.toString() === id)
-        if (p) setProperty(p)
+        if (p) {
+            setProperty(p)
+            if (p.status === 'auction') {
+                // Find and fetch auction detail
+                fetchAuctionDetailByProp(p.id)
+            }
+        }
     }, [id, properties])
+
+    const fetchAuctionDetailByProp = async (propId: string) => {
+        try {
+            const auctions = await api.get('/auction/active/all')
+            const auction = auctions.find((a: any) => a.property_id === propId)
+            if (auction) {
+                await fetchAuctionDetail(auction.id)
+            }
+        } catch (e) {
+            console.error("Failed to fetch auction detail", e)
+        }
+    }
+
+    const runVerification = async () => {
+        setVerifying(true)
+        try {
+            const token = useAuthStore.getState().accessToken
+            const data = await api.post(`/verify/${property.id}`, {
+                asking_price: property.price
+            }, token)
+            setVerificationReport(data)
+            toast.success("AI Verification Complete!")
+        } catch (e: any) {
+            toast.error("Verification failed: " + e.message)
+        } finally {
+            setVerifying(false)
+        }
+    }
+
+    const { buy, buyingId } = useMarketplaceStore()
+    const { createAuction, currentAuction, bids, fetchAuctionDetail } = useAuctionStore()
+    const user = useAuthStore(s => (s as any).user)
+    const [verifying, setVerifying] = useState(false)
+    const [verificationReport, setVerificationReport] = useState<any>(null)
 
     if (!property) return (
         <div className="h-[60vh] flex flex-col items-center justify-center gap-6">
@@ -90,6 +137,32 @@ export default function PropertyDetailPage() {
             <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Synching Neural Node...</p>
         </div>
     )
+
+    const isOwner = property.owner_id && user && (property.owner_id === user._id || property.owner?.id === user._id)
+    const isSold = property.status === 'sold'
+
+    const handleBuy = async () => {
+        if (isSold || isOwner) return
+        try {
+            await buy(property.id)
+            toast.success("Purchase initiated!")
+        } catch (e: any) {
+            toast.error(e.message || "Failed to buy")
+        }
+    }
+
+    const handleBid = async () => {
+        const amount = prompt("Enter bid amount (INR):")
+        if (amount) {
+            try {
+                const token = useAuthStore.getState().accessToken
+                await api.post(`/auction/bid/${property.id}`, { amount: parseFloat(amount) }, token)
+                toast.success("Bid placed successfully!")
+            } catch (err: any) {
+                toast.error(err.message || "Failed to place bid")
+            }
+        }
+    }
 
     return (
         <div className="space-y-12">
@@ -149,9 +222,18 @@ export default function PropertyDetailPage() {
                                         {property.title}
                                     </h1>
                                 </div>
-                                <div className="glass-panel p-6 rounded-3xl border-white/[0.1] shadow-2xl backdrop-blur-3xl">
-                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-1">Market Evaluation</p>
+                                <div className="glass-panel p-6 rounded-3xl border-white/[0.1] shadow-2xl backdrop-blur-3xl min-w-[200px]">
+                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-1">
+                                        {property.status === 'auction' ? 'Highest Bid' : 'Market Evaluation'}
+                                    </p>
                                     <p className="text-3xl font-black text-white tracking-tighter">{formatCurrency(property.price)}</p>
+                                    <div className="mt-3 pt-3 border-t border-white/5 space-y-1">
+                                        <p className="text-[9px] font-black text-slate-600 uppercase">Owner Identity</p>
+                                        <p className="text-xs font-black text-cyan-400">{property.owner?.name || 'Protocol Node'}</p>
+                                        <p className="text-[9px] font-mono text-slate-500 uppercase tracking-tighter">
+                                            {property.owner?.wallet ? property.owner.wallet.slice(0, 10) + '...' : '0xSECURE...'}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -245,10 +327,35 @@ export default function PropertyDetailPage() {
                         </div>
 
                         <div className="w-full mt-12 space-y-4">
-                            <button className="w-full py-5 rounded-[1.5rem] bg-white text-black text-[11px] font-black uppercase tracking-[0.3em] shadow-2xl hover:bg-cyan-50 transition-all active:scale-95 overflow-hidden group relative">
-                                <span className="relative z-10">ACQUIRE ASSET</span>
-                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-500/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
-                            </button>
+                            <Toaster position="top-right" />
+                            {property.status === 'auction' ? (
+                                <button
+                                    onClick={handleBid}
+                                    disabled={isOwner || isSold}
+                                    className="w-full py-5 rounded-[1.5rem] bg-cyan-500 text-white text-[11px] font-black uppercase tracking-[0.3em] shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:bg-cyan-400 transition-all active:scale-95 disabled:opacity-50"
+                                >
+                                    PLACE HIGHER BID
+                                </button>
+                            ) : property.status === 'listed' ? (
+                                <button
+                                    onClick={handleBuy}
+                                    disabled={isOwner || isSold || (buyingId === property.id)}
+                                    className="w-full py-5 rounded-[1.5rem] bg-white text-black text-[11px] font-black uppercase tracking-[0.3em] shadow-2xl hover:bg-cyan-50 transition-all active:scale-95 disabled:opacity-50"
+                                >
+                                    {buyingId === property.id ? 'PROCESSING...' : isOwner ? 'YOUR ASSET' : 'ACQUIRE ASSET'}
+                                </button>
+                            ) : isOwner ? (
+                                <Link href="/portfolio" className="block">
+                                    <button className="w-full py-5 rounded-[1.5rem] bg-emerald-500 text-white text-[11px] font-black uppercase tracking-[0.3em] shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:bg-emerald-400 transition-all">
+                                        LIST FOR SALE
+                                    </button>
+                                </Link>
+                            ) : (
+                                <button className="w-full py-5 rounded-[1.5rem] bg-white/[0.03] border border-white/[0.08] text-[11px] font-black text-slate-500 uppercase tracking-[0.3em] cursor-not-allowed">
+                                    NOT LISTED
+                                </button>
+                            )}
+
                             <button className="w-full py-5 rounded-[1.5rem] bg-white/[0.03] border border-white/[0.08] text-[11px] font-black text-cyan-400 uppercase tracking-[0.3em] hover:bg-cyan-500/10 hover:border-cyan-500/20 transition-all">
                                 FRACTIONALIZE
                             </button>
@@ -256,26 +363,122 @@ export default function PropertyDetailPage() {
                     </div>
 
                     <div className="glass-panel p-8 rounded-[2.5rem] border-white/[0.06] space-y-6">
-                        <div className="flex items-center gap-3">
-                            <ShieldCheck size={20} className="text-emerald-500" />
-                            <h3 className="text-sm font-black text-white uppercase tracking-widest">Network Verification</h3>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <ShieldCheck size={20} className="text-emerald-500" />
+                                <h3 className="text-sm font-black text-white uppercase tracking-widest">Network Verification</h3>
+                            </div>
+                            <button
+                                onClick={runVerification}
+                                disabled={verifying}
+                                className="px-3 py-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 text-[9px] font-black text-cyan-400 uppercase tracking-widest hover:bg-cyan-500/20 transition-all flex items-center gap-2"
+                            >
+                                {verifying ? <Loader2 size={10} className="animate-spin" /> : <Brain size={10} />}
+                                {verifying ? 'VERIFYING...' : 'RUN AI VERIFY'}
+                            </button>
                         </div>
-                        <div className="space-y-4">
-                            {[
-                                { label: 'Property Deed', status: 'VERIFIED', icon: ShieldCheck },
-                                { label: 'Zoning Compliance', status: 'CONFIRMED', icon: ShieldCheck },
-                                { label: 'Environmental ESG', status: 'GRADE A', icon: Activity },
-                            ].map((v, i) => (
-                                <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/[0.04]">
-                                    <div className="flex items-center gap-3">
-                                        <v.icon size={14} className="text-slate-500" />
-                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight">{v.label}</span>
-                                    </div>
-                                    <span className="text-[9px] font-black text-emerald-400 uppercase tracking-tighter">{v.status}</span>
+
+                        {verificationReport ? (
+                            <div className="space-y-3">
+                                <div className={cn(
+                                    "p-3 rounded-xl border flex items-center gap-3",
+                                    verificationReport.overall_status === 'PASS' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5' :
+                                        verificationReport.overall_status === 'WARN' ? 'text-amber-400 border-amber-500/20 bg-amber-500/5' :
+                                            'text-rose-400 border-rose-500/20 bg-rose-500/5'
+                                )}>
+                                    {verificationReport.overall_status === 'PASS' ? <CheckCircle2 size={14} /> :
+                                        verificationReport.overall_status === 'WARN' ? <AlertTriangle size={14} /> : <XCircle size={14} />}
+                                    <span className="text-[10px] font-black uppercase tracking-widest">{verificationReport.overall_label}</span>
                                 </div>
-                            ))}
-                        </div>
+                                {Object.entries(verificationReport.checks || {}).map(([key, check]: [string, any]) => (
+                                    <div key={key} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                                        <div className="flex items-center gap-3">
+                                            {check.status === 'PASS' ? <CheckCircle2 size={12} className="text-emerald-500" /> :
+                                                check.status === 'WARN' ? <AlertTriangle size={12} className="text-amber-500" /> : <XCircle size={12} className="text-rose-500" />}
+                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-tight">{key.replace('_', ' ')}</span>
+                                        </div>
+                                        <span className="text-[8px] font-black text-slate-500 uppercase">{check.label}</span>
+                                    </div>
+                                ))}
+
+                                {/* Strict Authenticity Predictor Sub-panel */}
+                                {verificationReport.authenticity_rules && (
+                                    <div className="mt-6 pt-4 border-t border-white/[0.04]">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <Fingerprint size={14} className="text-purple-400" />
+                                            <h4 className="text-[10px] font-black text-purple-400 uppercase tracking-[0.2em]">Authenticity Predictor Engine</h4>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {Object.entries(verificationReport.authenticity_rules || {}).map(([key, check]: [string, any]) => (
+                                                <div key={key} className="flex items-center justify-between p-2 rounded-lg bg-black/20 border border-white/[0.02]">
+                                                    <div className="flex items-center gap-2">
+                                                        {check.status === 'PASS' ? <ShieldCheck size={10} className="text-emerald-500" /> : <XCircle size={10} className="text-rose-500" />}
+                                                        <span className="text-[9px] font-black text-slate-300 uppercase tracking-tight">{key}</span>
+                                                    </div>
+                                                    <span className={cn(
+                                                        "text-[8px] font-black uppercase tracking-wider",
+                                                        check.status === 'PASS' ? "text-emerald-400/80" : "text-rose-400"
+                                                    )}>{check.label}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {[
+                                    { label: 'Property Deed', status: 'VERIFIED', icon: ShieldCheck },
+                                    { label: 'Zoning Compliance', status: 'CONFIRMED', icon: ShieldCheck },
+                                    { label: 'Environmental ESG', status: 'GRADE A', icon: Activity },
+                                ].map((v, i) => (
+                                    <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/[0.04]">
+                                        <div className="flex items-center gap-3">
+                                            <v.icon size={14} className="text-slate-500" />
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight">{v.label}</span>
+                                        </div>
+                                        <span className="text-[9px] font-black text-emerald-400 uppercase tracking-tighter">{v.status}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
+
+                    {/* Bidders Section */}
+                    {property.status === 'auction' && (
+                        <div className="glass-panel p-8 rounded-[2.5rem] border-white/[0.06] space-y-6">
+                            <div className="flex items-center gap-3">
+                                <Gavel size={20} className="text-cyan-400" />
+                                <h3 className="text-sm font-black text-white uppercase tracking-widest">Active Auctioneers</h3>
+                            </div>
+                            <div className="space-y-3">
+                                {bids && bids.length > 0 ? (
+                                    bids.map((bid: any, i: number) => (
+                                        <div key={bid.id} className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/[0.04] group hover:border-cyan-500/20 transition-all">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-lg bg-white/[0.05] flex items-center justify-center text-[10px] font-black text-slate-500 uppercase">
+                                                    #{i + 1}
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-black text-white uppercase tracking-tight">
+                                                        {shortAddress(bid.bidder_wallet || bid.bidder_id)}
+                                                    </p>
+                                                    <p className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">
+                                                        {new Date(bid.created_at).toLocaleTimeString()}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <span className="text-xs font-black text-cyan-400">₹{bid.amount.toLocaleString('en-IN')}</span>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="py-8 text-center border-dashed border border-white/[0.06] rounded-2xl text-[10px] font-black text-slate-600 uppercase tracking-widest">
+                                        No bids placed yet
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

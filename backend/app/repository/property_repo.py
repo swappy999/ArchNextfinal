@@ -36,14 +36,35 @@ async def get_all_properties() -> List[dict]:
 
 async def get_property_by_id(property_id: str) -> Optional[dict]:
     try:
+        # Cast to UUID if string to ensure postgres compatibility
+        import uuid
+        if isinstance(property_id, str):
+            try:
+                property_id = uuid.UUID(property_id)
+            except ValueError:
+                pass
+                
         async with AsyncSessionLocal() as session:
             result = await session.execute(select(PropertyDB).where(PropertyDB.id == property_id))
             return _to_dict(result.scalars().first())
-    except:
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Repository Error [get_property_by_id]: {e}")
         return None
 
 async def update_property(property_id: str, data: dict) -> bool:
+    import uuid
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
+        if isinstance(property_id, str):
+            try:
+                property_id = uuid.UUID(property_id)
+            except ValueError:
+                logger.warning(f"Invalid UUID string passed to update_property: {property_id}")
+                pass
+
         if "location" in data and "coordinates" in data["location"]:
             coords = data["location"]["coordinates"]
             data["longitude"] = coords[0]
@@ -54,18 +75,32 @@ async def update_property(property_id: str, data: dict) -> bool:
             stmt = update(PropertyDB).where(PropertyDB.id == property_id).values(**data)
             result = await session.execute(stmt)
             await session.commit()
+            
+            if result.rowcount == 0:
+                logger.warning(f"No rows updated for property_id: {property_id}. Check if ID exists.")
+            
             return result.rowcount > 0
-    except:
+    except Exception as e:
+        logger.error(f"DATABASE UPDATE CRASH [update_property]: {e} | ID: {property_id} | data keys: {list(data.keys())}")
         return False
 
 async def delete_property_repo(property_id: str) -> bool:
     try:
+        import uuid
+        if isinstance(property_id, str):
+            try:
+                property_id = uuid.UUID(property_id)
+            except ValueError:
+                pass
+
         async with AsyncSessionLocal() as session:
             stmt = delete(PropertyDB).where(PropertyDB.id == property_id)
             result = await session.execute(stmt)
             await session.commit()
             return result.rowcount > 0
-    except:
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Repository Error [delete_property_repo]: {e}")
         return False
 
 async def get_nearby_properties(long: float, lat: float, radius: int = 5000) -> List[dict]:

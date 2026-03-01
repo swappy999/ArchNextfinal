@@ -1,48 +1,120 @@
 from app.integrations.marketplace import get_listing, list_property_backend
 from app.repository.property_repo import get_property_by_id, get_all_properties, update_property
 from app.core.config import settings
+from app.services.prediction_service import get_prediction, _is_loaded
 from fastapi import HTTPException
+import random
+
+# Market tier classification based on predicted price
+def _classify_tier(predicted_price: float) -> str:
+    if predicted_price >= 12000:
+        return "A"
+    elif predicted_price >= 7000:
+        return "B"
+    else:
+        return "C"
+
+async def _get_ai_valuation(lat: float, lng: float, size_sqft: int = 1200) -> dict:
+    """Generate AI valuation for a property based on its location."""
+    try:
+        if not _is_loaded or not lat or not lng:
+            return None
+        prediction = await get_prediction(lat, lng)
+        price_per_sqft = round(prediction["predicted_price"], 2)
+        total_value = round(price_per_sqft * size_sqft, 0)
+        confidence = round(
+            (prediction["infra_score"] + prediction["access_score"] + prediction["demand_score"]) / 3 * 100, 1
+        )
+        return {
+            "predicted_price_per_sqft": price_per_sqft,
+            "total_estimated_value": total_value,
+            "confidence": confidence,
+            "market_tier": _classify_tier(price_per_sqft),
+            "infra_score": round(prediction["infra_score"] * 100, 1),
+            "access_score": round(prediction["access_score"] * 100, 1),
+            "demand_score": round(prediction["demand_score"] * 100, 1),
+        }
+    except Exception:
+        return None
 
 async def get_all_listings_service() -> list:
     """
-    Returns all properties that are listed for sale on the marketplace.
-    Combines MongoDB metadata with on-chain listing status.
+    Returns all properties that are available for interaction in the marketplace.
+    Includes listed, auction, verified, and owned assets.
     """
+    from app.repository.user_repo import get_user_by_id
     all_props = await get_all_properties()
 
-    # Filter to only 'available' properties, take the first 40 to ensure UI performance
-    available_props = [p for p in all_props if p.get("status", "available") == "available"][:40]
+    # Show everything that is TRADABLE or VERIFIED
+    # Verified = ready to be listed/bidded on
+    # Owned/Verified = user can list/auction them
+    marketable_props = [p for p in all_props if p.get("status") in ["listed", "auction", "verified", "owned", "available", "sold"]]
 
     listings = []
-    
-    # We want to simulate a live market. 
-    # We will make roughly 30% "On-Chain" (NFT) and 70% "Standard"
-    for idx, prop in enumerate(available_props):
-        is_nft = (idx % 3 == 0) # Every 3rd property is "On-Chain"
-        
-        # Real INR price from DB
-        real_price = prop.get("price", 0)
-        
-        # Determine token ID for the UI
+    for idx, prop in enumerate(marketable_props):
+        is_nft = bool(prop.get("is_nft", False))
         token_id = prop.get("nft_token_id")
-        if is_nft and token_id is None:
-            token_id = 1000 + idx # Mock token ID for display purposes if not minted
-            
+        status = prop.get("status", "available")
+        prop_id_str = str(prop.get("id"))
+        lat = prop.get("latitude")
+        lng = prop.get("longitude")
+
+        # Fetch owner details for transparency
+        owner_info = {"id": prop.get("owner_id"), "name": "Protocol", "wallet": None}
+        if prop.get("owner_id"):
+            try:
+                user = await get_user_by_id(prop.get("owner_id"))
+                if user:
+                    owner_info = {
+                        "id": str(user.get("_id")),
+                        "name": user.get("full_name") or user.get("email") or "User",
+                        "wallet": user.get("wallet_address")
+                    }
+            except:
+                pass
+
+        # INR display price from DB
+        real_price = prop.get("price", 0)
+
+        # MATIC on-chain price
+        matic_price = prop.get("listing_price_matic") or prop.get("price_matic") or 0.0
+
+        # We will collect these and run asyncio.gather below
         listings.append({
-            "id": prop.get("id"),
-            "property_id": prop.get("id"),
-            "title": prop.get("title", "Premium Kolkata Asset"),
-            "address": prop.get("description", "Kolkata, WB")[:50], # Abbreviate desc as address
+            "__lat": lat,
+            "__lng": lng,
+            "id": prop_id_str,
+            "property_id": prop_id_str,
+            "title": prop.get("title", "Premium Asset"),
+            "address": prop.get("description", "Kolkata, WB")[:50],
             "price": real_price,
+            "price_listed_matic": matic_price,
             "seller": prop.get("owner_id"),
+            "owner": owner_info,
             "is_nft": is_nft,
+            "status": status,
             "token_id": token_id if is_nft else None,
             "nft_token_id": token_id if is_nft else None,
-            "location": {"lat": prop.get("latitude"), "lng": prop.get("longitude")},
+            "location": {"lat": lat, "lng": lng},
             "image_url": prop.get("image_url") or (prop.get("images") and prop.get("images")[0]) or f"https://picsum.photos/seed/{1000 + idx}/800/600",
+            "is_verified": bool(prop.get("is_verified", False) or prop.get("status") == "verified"),
+            "verification_score": prop.get("verification_score"),
+            "verification_hash": prop.get("verification_hash"),
         })
 
+    import asyncio
+    
+    async def enrich_ai(item):
+        ai_val = await _get_ai_valuation(item["__lat"], item["__lng"])
+        del item["__lat"]
+        del item["__lng"]
+        item["ai_valuation"] = ai_val
+        return item
+        
+    listings = await asyncio.gather(*(enrich_ai(item) for item in listings))
+
     return listings
+
 
 async def get_property_listing_service(token_id: int) -> dict:
     """
@@ -76,12 +148,18 @@ async def list_property_service(property_id: str, price_matic: float, current_us
     nft_address = getattr(settings, "NFT_CONTRACT_ADDRESS", None)
     marketplace_address = getattr(settings, "MARKETPLACE_ADDRESS", None)
 
-    # Save listing intent to DB
-    await update_property(property_id, {
-        "listing_price_matic": price_matic,
-        "listing_price_wei": price_wei,
-        "listing_status": "pending"
-    })
+    from app.services.property_state.property_state_controller import update_property_state
+    from app.services.property_state.property_state_machine import PropertyEvent
+    
+    # Save listing intent to DB and run mandatory AI re-verification
+    await update_property_state(
+        PropertyEvent.LIST_CREATED,
+        property_id,
+        payload={
+            "price_matic": price_matic,
+            "user_id": str(current_user["_id"])
+        }
+    )
 
     return {
         "property_id": property_id,

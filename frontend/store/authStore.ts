@@ -63,6 +63,11 @@ export const useAuthStore = create<AuthState>()(
                 set({ isLoading: true })
                 try {
                     const result = await api.post('/auth/signup', { username: name, email, password })
+
+                    if (result.error) {
+                        throw new Error(result.error)
+                    }
+
                     // Signup always requires verification now
                     set({
                         user: { email, username: name } as User,
