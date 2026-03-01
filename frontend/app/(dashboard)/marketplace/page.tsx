@@ -153,6 +153,11 @@ function NFTCard({ listing, index }: { listing: any, index: number }) {
                             <Fingerprint size={12} /> ON-CHAIN
                         </a>
                     )}
+                    {listing.price_listed_matic > 0 && (
+                        <span className="text-[9px] font-black px-3 py-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 backdrop-blur-md text-purple-400 uppercase tracking-widest flex items-center gap-1.5 shadow-lg">
+                            <Cpu size={12} /> Polygon Amoy
+                        </span>
+                    )}
                 </div>
 
                 {/* Market Tier Badge */}
@@ -208,7 +213,7 @@ function NFTCard({ listing, index }: { listing: any, index: number }) {
                             {listing.status === 'auction' ? 'Highest Bid' : 'Listed Price'}
                         </p>
                         <p className="text-xl font-black text-white tracking-tighter group-hover:text-cyan-400 transition-colors glow-text truncate pr-2">
-                            {formatCurrency(listing.price || 0)}
+                            {listing.price_listed_matic ? `${listing.price_listed_matic} POL` : formatCurrency(listing.price || 0)}
                         </p>
                     </div>
 

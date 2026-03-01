@@ -60,7 +60,7 @@ export function PropertyCard({ property, view, index }: { property: any; view: '
 
                 <div className="flex items-center gap-8 shrink-0">
                     <div className="text-right">
-                        <p className="text-lg font-black text-white group-hover:text-cyan-400 transition-colors tracking-tight">{formatCurrency(property.price || 0)}</p>
+                        <p className="text-lg font-black text-white group-hover:text-cyan-400 transition-colors tracking-tight">{property.price_listed_matic ? `${property.price_listed_matic} POL` : formatCurrency(property.price || 0)}</p>
                         <div className="flex items-center justify-end gap-1.5 mt-0.5">
                             <Cpu size={10} className="text-cyan-500" />
                             <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Growth: {property.growth_score !== undefined ? property.growth_score : '8.4'}</span>
@@ -112,6 +112,11 @@ export function PropertyCard({ property, view, index }: { property: any; view: '
                                 <Fingerprint size={12} /> ON-CHAIN
                             </span>
                         )}
+                        {property.price_listed_matic > 0 && (
+                            <span className="text-[9px] font-black px-3 py-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 backdrop-blur-md text-purple-400 uppercase tracking-widest flex items-center gap-1.5 shadow-lg">
+                                Polygon Amoy
+                            </span>
+                        )}
                         <span className={cn(
                             "text-[9px] font-black px-3 py-1.5 rounded-xl border backdrop-blur-md uppercase tracking-widest shadow-lg flex items-center gap-1.5",
                             config.bg, config.border, config.color
@@ -153,7 +158,7 @@ export function PropertyCard({ property, view, index }: { property: any; view: '
                         <div className="grid grid-cols-2 gap-3">
                             <div className="glass-panel p-3 rounded-xl border border-white/[0.06]">
                                 <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Valuation</p>
-                                <p className="text-sm font-black text-white glow-text truncate">{formatCurrency(property.price || 0)}</p>
+                                <p className="text-sm font-black text-white glow-text truncate">{property.price_listed_matic ? `${property.price_listed_matic} POL` : formatCurrency(property.price || 0)}</p>
                             </div>
                             <div className="glass-panel p-3 rounded-xl border border-white/[0.06]">
                                 <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Growth Score</p>
